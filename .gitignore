@@ -5,3 +5,4 @@ output/
 *.gz
 *.xz
 downloads/
+.claude/
