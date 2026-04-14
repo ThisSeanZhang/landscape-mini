@@ -29,6 +29,8 @@ FAIL_COUNT=0
 SKIP_COUNT=0
 FAIL_FAST="${FAIL_FAST:-0}"
 LANDSCAPE_TEST_HTTP_TIMEOUT="${LANDSCAPE_TEST_HTTP_TIMEOUT:-10}"
+LANDSCAPE_API_READY_TIMEOUT="${LANDSCAPE_API_READY_TIMEOUT:-45}"
+LANDSCAPE_API_READY_INTERVAL="${LANDSCAPE_API_READY_INTERVAL:-3}"
 
 run_check() {
     local desc="$1"
@@ -367,12 +369,24 @@ _landscape_api_get_operation() {
 detect_landscape_api_base() {
     API_BASE="https://localhost:${LANDSCAPE_CONTROL_PORT}"
 
-    if guest_run "curl -skI --max-time ${LANDSCAPE_TEST_HTTP_TIMEOUT} ${API_BASE}/ -o /dev/null" &>/dev/null; then
-        info "API base: ${API_BASE}"
-        return 0
-    fi
+    local elapsed=0
+    local timeout="${1:-${LANDSCAPE_API_READY_TIMEOUT}}"
+    local interval="${2:-${LANDSCAPE_API_READY_INTERVAL}}"
 
-    error "Landscape API not reachable at ${API_BASE}"
+    while [[ $elapsed -lt $timeout ]]; do
+        if guest_run "curl -skI --max-time ${LANDSCAPE_TEST_HTTP_TIMEOUT} ${API_BASE}/ -o /dev/null" &>/dev/null; then
+            info "API base: ${API_BASE}"
+            return 0
+        fi
+
+        sleep "${interval}"
+        ((elapsed += interval))
+        if ((elapsed < timeout)) && ((elapsed % 15 == 0)); then
+            info "  ...waiting for Landscape API (${elapsed}s)"
+        fi
+    done
+
+    error "Landscape API not reachable at ${API_BASE} after ${timeout}s"
     return 1
 }
 

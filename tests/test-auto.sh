@@ -351,7 +351,7 @@ run_all_checks() {
         guest_run "test -x /root/landscape-webserver"
 
     run_check "Web UI listening on port ${LANDSCAPE_CONTROL_PORT}" \
-        guest_run "curl -skI --max-time ${LANDSCAPE_TEST_HTTP_TIMEOUT} https://localhost:${LANDSCAPE_CONTROL_PORT}/ -o /dev/null"
+        detect_landscape_api_base
 
     local ip_fwd
     ip_fwd=$(guest_run "sysctl -n net.ipv4.ip_forward" 2>/dev/null)
