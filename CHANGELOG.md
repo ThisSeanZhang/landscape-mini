@@ -8,6 +8,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Changed / 变更
+
+- Rebuild validation around separate readiness and dataplane suites, and align CI / manual retest / release workflows on a shared validation contract with traceable artifact identity / 将验证体系重构为 readiness 与 dataplane 两套测试，并统一 CI / 手动复测 / release 的验证契约与可追踪 artifact 身份
+
 ### Fixed / 修复
 
 - Harden CI and release test stability by retrying API login, using less brittle tool detection, and aligning CI's default Landscape version with release builds / 通过重试 API 登录、改进工具探测稳定性，并让 CI 默认 Landscape 版本与 release 保持一致，提升 CI 与发布测试稳定性
