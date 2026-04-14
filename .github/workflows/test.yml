@@ -10,6 +10,7 @@ on:
 jobs:
   test:
     runs-on: ubuntu-24.04
+    timeout-minutes: 45
     strategy:
       matrix:
         include:
@@ -24,7 +25,7 @@ jobs:
       - name: Install test dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y sshpass socat curl qemu-system-x86 ovmf
+          sudo apt-get install -y sshpass socat curl jq qemu-system-x86 ovmf
 
       - name: Download image from build artifacts
         uses: actions/download-artifact@v4
@@ -48,10 +49,10 @@ jobs:
       - name: Run health checks (${{ matrix.variant }})
         run: |
           ls -lh output/
-          ./tests/test-auto.sh output/*.img
+          timeout --foreground 20m ./tests/test-auto.sh output/*.img
 
       - name: Run E2E network tests (${{ matrix.variant }})
-        run: ./tests/test-e2e.sh output/*.img
+        run: timeout --foreground 25m ./tests/test-e2e.sh output/*.img
 
       - name: Upload test logs
         if: always()

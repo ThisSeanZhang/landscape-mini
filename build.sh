@@ -95,7 +95,7 @@ esac
 WORK_DIR="$(pwd)/work"
 OUTPUT_DIR="$(pwd)/output"
 ROOTFS_DIR="${WORK_DIR}/rootfs"
-DOWNLOAD_DIR="${WORK_DIR}/downloads"
+DOWNLOAD_DIR="${WORK_DIR}/downloads/${LANDSCAPE_VERSION}"
 LOOP_DEV=""
 
 # Docker suffix

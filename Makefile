@@ -31,6 +31,7 @@ IMAGE_ALPINE  := output/landscape-mini-x86-alpine.img
 OVMF          := /usr/share/ovmf/OVMF.fd
 SSH_PORT      := 2222
 WEB_PORT      := 9800
+LANDSCAPE_CONTROL_PORT := 6443
 QEMU_MEM      := 1024
 QEMU_SMP      := 2
 
@@ -62,9 +63,9 @@ deps: ## Install all host dependencies needed for building
 		grub-efi-amd64-bin grub-pc-bin qemu-utils qemu-system-x86 ovmf \
 		rsync curl gdisk unzip
 
-deps-test: ## Install test dependencies (sshpass, socat, curl)
+deps-test: ## Install test dependencies (sshpass, socat, curl, jq)
 	sudo apt-get update
-	sudo apt-get install -y sshpass socat curl qemu-system-x86 ovmf
+	sudo apt-get install -y sshpass socat curl jq qemu-system-x86 ovmf
 
 # --------------------------------------------------------------------------
 # Build targets — Debian
@@ -128,7 +129,7 @@ test-serial: $(IMAGE) ## Boot Debian image in QEMU (interactive serial console)
 		-bios $(OVMF) \
 		-drive file=$(IMAGE),format=raw,if=virtio \
 		-device virtio-net-pci,netdev=wan \
-		-netdev user,id=wan,hostfwd=tcp::$(SSH_PORT)-:22,hostfwd=tcp::$(WEB_PORT)-:9800 \
+		-netdev user,id=wan,hostfwd=tcp::$(SSH_PORT)-:22,hostfwd=tcp::$(WEB_PORT)-:$(LANDSCAPE_CONTROL_PORT) \
 		-device virtio-net-pci,netdev=lan \
 		-netdev user,id=lan \
 		-display none \
@@ -142,7 +143,7 @@ test-gui: $(IMAGE) ## Boot Debian image in QEMU (with VGA display window)
 		-bios $(OVMF) \
 		-drive file=$(IMAGE),format=raw,if=virtio \
 		-device virtio-net-pci,netdev=wan \
-		-netdev user,id=wan,hostfwd=tcp::$(SSH_PORT)-:22,hostfwd=tcp::$(WEB_PORT)-:9800 \
+		-netdev user,id=wan,hostfwd=tcp::$(SSH_PORT)-:22,hostfwd=tcp::$(WEB_PORT)-:$(LANDSCAPE_CONTROL_PORT) \
 		-device virtio-net-pci,netdev=lan \
 		-netdev user,id=lan
 

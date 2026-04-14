@@ -35,18 +35,27 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
+source "${SCRIPT_DIR}/common.sh"
 
 # ── Configuration ─────────────────────────────────────────────────────────────
 
 IMAGE_PATH="${1:-${PROJECT_DIR}/output/landscape-mini-x86.img}"
 SSH_PORT="${SSH_PORT:-2222}"
 WEB_PORT="${WEB_PORT:-9800}"
+LANDSCAPE_CONTROL_PORT="${LANDSCAPE_CONTROL_PORT:-6443}"
 QEMU_MEM="${QEMU_MEM:-1024}"
 QEMU_SMP="${QEMU_SMP:-2}"
 SSH_PASSWORD="landscape"
-SSH_TIMEOUT=120
+API_USERNAME="root"
+API_PASSWORD="root"
+SSH_TIMEOUT="${SSH_TIMEOUT:-120}"
 SHUTDOWN_TIMEOUT=15
 DHCP_TIMEOUT=120
+
+EXPECTED_WAN_IFACE="eth0"
+EXPECTED_LAN_IFACE="eth1"
+EXPECTED_LAN_GW="192.168.10.1"
+EXPECTED_LAN_SUBNET_PREFIX="192.168.10."
 
 # CirrOS — use GitHub mirror (cirros-cloud.net is often unreachable from CI)
 CIRROS_VERSION="0.6.2"
@@ -77,25 +86,6 @@ ROUTER_MONITOR=""
 CLIENT_MONITOR=""
 TEMP_IMAGE=""
 TEMP_CIRROS=""
-API_BASE=""
-SSH_CMD=""
-
-# ── Colors ────────────────────────────────────────────────────────────────────
-
-if [[ -t 1 ]]; then
-    RED='\033[0;31m'
-    GREEN='\033[0;32m'
-    YELLOW='\033[0;33m'
-    CYAN='\033[0;36m'
-    NC='\033[0m'
-else
-    RED='' GREEN='' YELLOW='' CYAN='' NC=''
-fi
-
-info()  { echo -e "${CYAN}[INFO]${NC} $*"; }
-warn()  { echo -e "${YELLOW}[WARN]${NC} $*"; }
-error() { echo -e "${RED}[ERROR]${NC} $*"; }
-ok()    { echo -e "${GREEN}[OK]${NC} $*"; }
 
 # ── Cleanup ───────────────────────────────────────────────────────────────────
 
@@ -103,7 +93,6 @@ cleanup() {
     local exit_code=$?
     set +e
 
-    # Stop client VM
     if [[ -n "${CLIENT_PID}" ]] && kill -0 "${CLIENT_PID}" 2>/dev/null; then
         info "Stopping Client VM (PID ${CLIENT_PID})..."
         if [[ -n "${CLIENT_MONITOR}" ]] && [[ -S "${CLIENT_MONITOR}" ]]; then
@@ -116,7 +105,6 @@ cleanup() {
         fi
     fi
 
-    # Stop router VM
     if [[ -n "${ROUTER_PID}" ]] && kill -0 "${ROUTER_PID}" 2>/dev/null; then
         info "Stopping Router VM (PID ${ROUTER_PID})..."
         if [[ -n "${ROUTER_MONITOR}" ]] && [[ -S "${ROUTER_MONITOR}" ]]; then
@@ -137,7 +125,6 @@ cleanup() {
         fi
     fi
 
-    # Clean up temp files
     [[ -n "${TEMP_IMAGE}" ]] && rm -f "${TEMP_IMAGE}"
     [[ -n "${TEMP_CIRROS}" ]] && rm -f "${TEMP_CIRROS}"
     [[ -n "${ROUTER_PIDFILE}" ]] && rm -f "${ROUTER_PIDFILE}"
@@ -161,36 +148,16 @@ preflight() {
         exit 2
     fi
 
-    local missing=()
-    for cmd in qemu-system-x86_64 qemu-img sshpass curl socat; do
-        if ! command -v "$cmd" &>/dev/null; then
-            missing+=("$cmd")
-        fi
-    done
-    if [[ ${#missing[@]} -gt 0 ]]; then
-        error "Missing required tools: ${missing[*]}"
+    if ! require_commands qemu-system-x86_64 qemu-img sshpass curl socat jq; then
         error "Run 'make deps-test' to install test dependencies."
         exit 2
     fi
 
-    for port in "${SSH_PORT}" "${WEB_PORT}"; do
-        if ss -tlnp 2>/dev/null | grep -q ":${port} "; then
-            error "Port ${port} is already in use. Is another QEMU instance running?"
-            exit 2
-        fi
-    done
+    if ! ensure_local_ports_free "${SSH_PORT}" "${WEB_PORT}"; then
+        exit 2
+    fi
 
     ok "Preflight passed"
-}
-
-# ── KVM Detection ─────────────────────────────────────────────────────────────
-
-detect_kvm() {
-    if [[ -w /dev/kvm ]]; then
-        echo "-enable-kvm"
-    else
-        echo "-cpu qemu64"
-    fi
 }
 
 # ── Download CirrOS ───────────────────────────────────────────────────────────
@@ -206,7 +173,7 @@ download_cirros() {
     else
         info "Downloading CirrOS ${CIRROS_VERSION} ..." >&2
         if ! curl -fL --retry 3 --retry-delay 5 -o "${cirros_file}" "${CIRROS_URL}" >&2; then
-            fail "Failed to download CirrOS from ${CIRROS_URL}"
+            error "Failed to download CirrOS from ${CIRROS_URL}" >&2
             return 1
         fi
         ok "CirrOS downloaded ($(du -h "${cirros_file}" | awk '{print $1}'))" >&2
@@ -215,19 +182,7 @@ download_cirros() {
     echo "${cirros_file}"
 }
 
-# ── Serial Log Dump ───────────────────────────────────────────────────────────
-
-dump_serial_log() {
-    local logfile="$1"
-    if [[ -f "${logfile}" ]]; then
-        echo ""
-        error "=== Last 50 lines of ${logfile} ==="
-        tail -n 50 "${logfile}" 2>/dev/null || true
-        echo ""
-    fi
-}
-
-# ── Start Router VM ──────────────────────────────────────────────────────────
+# ── Start Router VM ───────────────────────────────────────────────────────────
 
 start_router() {
     info "Preparing router disk image..."
@@ -242,14 +197,8 @@ start_router() {
     local kvm_flag
     kvm_flag=$(detect_kvm)
 
-    # Detect OVMF
     local ovmf=""
-    for path in /usr/share/ovmf/OVMF.fd /usr/share/OVMF/OVMF_CODE.fd /usr/share/edk2/ovmf/OVMF_CODE.fd; do
-        if [[ -f "$path" ]]; then
-            ovmf="$path"
-            break
-        fi
-    done
+    ovmf=$(detect_ovmf_firmware || true)
 
     local bios_args=()
     if [[ -n "$ovmf" ]]; then
@@ -268,7 +217,7 @@ start_router() {
         "${bios_args[@]}" \
         -drive "file=${TEMP_IMAGE},format=raw,if=virtio" \
         -device virtio-net-pci,netdev=wan,mac=${ROUTER_WAN_MAC} \
-        -netdev "user,id=wan,hostfwd=tcp::${SSH_PORT}-:22,hostfwd=tcp::${WEB_PORT}-:9800" \
+        -netdev "user,id=wan,hostfwd=tcp::${SSH_PORT}-:22,hostfwd=tcp::${WEB_PORT}-:${LANDSCAPE_CONTROL_PORT}" \
         -device virtio-net-pci,netdev=lan,mac=${ROUTER_LAN_MAC} \
         -netdev "socket,id=lan,mcast=${MCAST_ADDR}:${MCAST_PORT}" \
         -display none \
@@ -277,14 +226,13 @@ start_router() {
         -pidfile "${ROUTER_PIDFILE}" \
         -daemonize
 
-    sleep 1
-    if [[ -f "${ROUTER_PIDFILE}" ]]; then
-        ROUTER_PID=$(cat "${ROUTER_PIDFILE}")
+    if wait_pid=$(wait_for_pidfile "${ROUTER_PIDFILE}" "Router VM" 10); then
+        ROUTER_PID="$wait_pid"
         if kill -0 "${ROUTER_PID}" 2>/dev/null; then
             ok "Router VM started (PID ${ROUTER_PID})"
         else
             error "Router VM exited immediately"
-            dump_serial_log "${SERIAL_LOG}"
+            dump_log_tail "${SERIAL_LOG}" "router serial log"
             exit 2
         fi
     else
@@ -293,14 +241,13 @@ start_router() {
     fi
 }
 
-# ── Start Client VM ──────────────────────────────────────────────────────────
+# ── Start Client VM ───────────────────────────────────────────────────────────
 
 start_client() {
     local cirros_file="$1"
 
     info "Preparing client disk image..."
 
-    # COW overlay to keep cached CirrOS pristine
     TEMP_CIRROS=$(mktemp "${LOG_DIR}/e2e-client-XXXXXX.qcow2")
     rm -f "${TEMP_CIRROS}"
     qemu-img create -f qcow2 -b "${cirros_file}" -F qcow2 "${TEMP_CIRROS}"
@@ -326,14 +273,13 @@ start_client() {
         -pidfile "${CLIENT_PIDFILE}" \
         -daemonize
 
-    sleep 1
-    if [[ -f "${CLIENT_PIDFILE}" ]]; then
-        CLIENT_PID=$(cat "${CLIENT_PIDFILE}")
+    if wait_pid=$(wait_for_pidfile "${CLIENT_PIDFILE}" "Client VM" 10); then
+        CLIENT_PID="$wait_pid"
         if kill -0 "${CLIENT_PID}" 2>/dev/null; then
             ok "Client VM started (PID ${CLIENT_PID})"
         else
             error "Client VM exited immediately"
-            dump_serial_log "${CLIENT_SERIAL_LOG}"
+            dump_log_tail "${CLIENT_SERIAL_LOG}" "client serial log"
             exit 2
         fi
     else
@@ -342,137 +288,7 @@ start_client() {
     fi
 }
 
-# ── Wait for Router SSH ──────────────────────────────────────────────────────
-
-wait_for_ssh() {
-    info "Waiting for Router SSH (timeout: ${SSH_TIMEOUT}s)..."
-
-    local elapsed=0
-    while [[ $elapsed -lt $SSH_TIMEOUT ]]; do
-        if ! kill -0 "${ROUTER_PID}" 2>/dev/null; then
-            error "Router VM died unexpectedly"
-            dump_serial_log "${SERIAL_LOG}"
-            exit 2
-        fi
-
-        if sshpass -p "${SSH_PASSWORD}" \
-            ssh -o StrictHostKeyChecking=no \
-                -o UserKnownHostsFile=/dev/null \
-                -o ConnectTimeout=3 \
-                -o LogLevel=ERROR \
-                -p "${SSH_PORT}" \
-                root@localhost \
-                "echo ready" &>/dev/null; then
-            ok "SSH available after ${elapsed}s"
-            return 0
-        fi
-
-        sleep 3
-        ((elapsed += 3))
-        if ((elapsed % 15 == 0)); then
-            info "  ...still waiting (${elapsed}s)"
-        fi
-    done
-
-    error "SSH timeout after ${SSH_TIMEOUT}s"
-    dump_serial_log "${SERIAL_LOG}"
-    exit 2
-}
-
-# ── SSH Helpers ───────────────────────────────────────────────────────────────
-
-setup_ssh() {
-    SSH_CMD="sshpass -p ${SSH_PASSWORD} ssh \
-        -o StrictHostKeyChecking=no \
-        -o UserKnownHostsFile=/dev/null \
-        -o ConnectTimeout=10 \
-        -o LogLevel=ERROR \
-        -p ${SSH_PORT} \
-        root@localhost"
-}
-
-guest_run() {
-    $SSH_CMD "$@"
-}
-
-# ── Landscape API Helpers ─────────────────────────────────────────────────────
-
-api_get() {
-    local token="$1" path="$2"
-    guest_run "curl -sfkL --max-time 5 -H 'Authorization: Bearer ${token}' ${API_BASE}${path}"
-}
-
-api_post() {
-    local token="$1" path="$2" body="${3:-}"
-    if [[ -n "$body" ]]; then
-        guest_run "curl -sfkL --max-time 5 -H 'Authorization: Bearer ${token}' -H 'Content-Type: application/json' -X POST -d '${body}' ${API_BASE}${path}"
-    else
-        guest_run "curl -sfkL --max-time 5 -H 'Authorization: Bearer ${token}' -X POST ${API_BASE}${path}"
-    fi
-}
-
-detect_api_base() {
-    # The landscape router starts HTTP first (e.g. 6300), then after applying
-    # init config, adds HTTPS (e.g. 6443). Services like DHCP only work after
-    # the init config is applied. We wait for the highest port (HTTPS) to appear.
-    local web_port="" web_wait=0
-    while [[ $web_wait -lt 60 ]]; do
-        # Get all ports landscape-webserver is listening on, pick the highest
-        local ports
-        ports=$(guest_run "ss -tlnp 2>/dev/null | grep landscape-webse || true" 2>/dev/null \
-            | awk '{print $4}' | awk -F: '{print $NF}' | sort -rn || true)
-        local highest
-        highest=$(echo "$ports" | head -1)
-        local count
-        count=$(echo "$ports" | wc -w || true)
-
-        if [[ -n "$highest" && "$count" -ge 2 ]]; then
-            # Both HTTP and HTTPS are up — router is fully initialized
-            web_port="$highest"
-            break
-        elif [[ -n "$highest" && "$highest" -gt 6400 ]]; then
-            # Only HTTPS is up — good enough
-            web_port="$highest"
-            break
-        fi
-
-        sleep 3
-        ((web_wait += 3))
-        if ((web_wait % 15 == 0)); then
-            info "  ...waiting for landscape to fully initialize (${web_wait}s, ports: ${ports:-none})"
-        fi
-    done
-
-    if [[ -z "$web_port" ]]; then
-        # Fallback: use whatever port is available
-        web_port=$(guest_run "ss -tlnp 2>/dev/null | grep landscape-webse | head -1 | awk '{print \$4}' | awk -F: '{print \$NF}'" 2>/dev/null || true)
-    fi
-
-    if [[ -z "$web_port" ]]; then
-        error "Landscape web service not listening after 60s"
-        exit 2
-    fi
-
-    # Detect HTTP vs HTTPS
-    if guest_run "curl -sf --max-time 3 http://localhost:${web_port}/ -o /dev/null" &>/dev/null; then
-        API_BASE="http://localhost:${web_port}"
-    else
-        API_BASE="https://localhost:${web_port}"
-    fi
-
-    info "API base: ${API_BASE}"
-}
-
-api_login() {
-    local login_resp token
-    login_resp=$(guest_run "curl -sfkL --max-time 5 -H 'Content-Type: application/json' \
-        -X POST -d '{\"username\":\"root\",\"password\":\"root\"}' \
-        ${API_BASE}/api/auth/login" 2>/dev/null)
-    token=$(echo "$login_resp" | grep -oE '[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+' | head -1)
-    echo "$token"
-}
-
-# ── Wait for DHCP Assignment ─────────────────────────────────────────────────
+# ── Wait for DHCP Assignment ──────────────────────────────────────────────────
 
 wait_for_dhcp() {
     local token="$1"
@@ -481,23 +297,18 @@ wait_for_dhcp() {
 
     local elapsed=0
     while [[ $elapsed -lt $DHCP_TIMEOUT ]]; do
-        # Check client VM is still alive
         if ! kill -0 "${CLIENT_PID}" 2>/dev/null; then
             error "Client VM died while waiting for DHCP" >&2
-            dump_serial_log "${CLIENT_SERIAL_LOG}" >&2
+            dump_log_tail "${CLIENT_SERIAL_LOG}" "client serial log" >&2
             return 1
         fi
 
-        local assigned
-        assigned=$(api_get "$token" "/api/src/services/dhcp_v4/assigned_ips" 2>/dev/null)
-        if echo "$assigned" | grep -q "192.168.10"; then
-            local client_ip
-            client_ip=$(echo "$assigned" | grep -oE '192\.168\.10\.[0-9]+' | head -1)
-            if [[ -n "$client_ip" ]]; then
-                ok "Client received DHCP: ${client_ip} (after ${elapsed}s)" >&2
-                echo "$client_ip"
-                return 0
-            fi
+        local client_ip
+        client_ip=$(landscape_api_dhcp_assigned_ip "$token" "$EXPECTED_LAN_SUBNET_PREFIX" 2>/dev/null || true)
+        if [[ -n "$client_ip" ]]; then
+            ok "Client received DHCP: ${client_ip} (after ${elapsed}s)" >&2
+            echo "$client_ip"
+            return 0
         fi
 
         sleep 5
@@ -508,41 +319,11 @@ wait_for_dhcp() {
     done
 
     error "DHCP assignment timeout after ${DHCP_TIMEOUT}s" >&2
-    dump_serial_log "${CLIENT_SERIAL_LOG}" >&2
+    dump_log_tail "${CLIENT_SERIAL_LOG}" "client serial log" >&2
     return 1
 }
 
-# ── Check Helpers ─────────────────────────────────────────────────────────────
-
-PASS_COUNT=0
-FAIL_COUNT=0
-SKIP_COUNT=0
-
-run_check() {
-    local desc="$1"
-    shift
-    local output
-    output=$("$@" 2>&1)
-    local rc=$?
-    if [[ $rc -eq 0 ]]; then
-        echo "[PASS] ${desc}"
-        ((PASS_COUNT++))
-    else
-        echo "[FAIL] ${desc}"
-        echo "       output: ${output}"
-        ((FAIL_COUNT++))
-    fi
-    return $rc
-}
-
-run_skip() {
-    local desc="$1"
-    local reason="$2"
-    echo "[SKIP] ${desc} — ${reason}"
-    ((SKIP_COUNT++))
-}
-
-# ── E2E Network Tests ────────────────────────────────────────────────────────
+# ── E2E Network Tests ─────────────────────────────────────────────────────────
 
 run_e2e_checks() {
     local token="$1"
@@ -556,23 +337,19 @@ run_e2e_checks() {
     echo "============================================================"
     echo ""
 
-    # ── 1. DHCP ──────────────────────────────────────────────────────
     echo "---- DHCP ----"
 
     run_check "Client received DHCP IP (${client_ip})" \
         test -n "$client_ip"
 
-    local assigned
-    assigned=$(api_get "$token" "/api/src/services/dhcp_v4/assigned_ips" 2>/dev/null)
     run_check "DHCP assignment visible in API" \
-        echo "$assigned" \| grep -q "$client_ip"
+        test "$(landscape_api_dhcp_assigned_ip "$token" "$EXPECTED_LAN_SUBNET_PREFIX" 2>/dev/null || true)" = "$client_ip"
 
-    # ── 2. L2/L3 Gateway Connectivity ────────────────────────────────
     echo ""
     echo "---- Gateway Connectivity ----"
 
-    # Ping with retries — client needs time to apply DHCP IP after assignment
     local ping_ok=false
+    local attempt
     for attempt in 1 2 3 4 5 6; do
         if guest_run "ping -c 2 -W 3 ${client_ip}" &>/dev/null; then
             ping_ok=true
@@ -583,10 +360,9 @@ run_e2e_checks() {
     if [[ "$ping_ok" == "true" ]]; then
         run_check "Router can ping client (${client_ip})" true
     else
-        # Fallback: check ARP table for client MAC (proves L2 works)
         local arp_out
         arp_out=$(guest_run "ip neigh show ${client_ip}" 2>/dev/null || true)
-        if echo "$arp_out" | grep -qiE "REACHABLE|STALE|lladdr"; then
+        if matches_regex_i "$arp_out" 'REACHABLE|STALE|lladdr'; then
             run_check "Router has ARP entry for client (${client_ip})" true
             run_skip "Router can ping client (${client_ip})" "ping failed but ARP resolved"
         else
@@ -594,47 +370,34 @@ run_e2e_checks() {
         fi
     fi
 
-    # ── 3. DNS ───────────────────────────────────────────────────────
     echo ""
     echo "---- DNS ----"
 
-    # The landscape router provides DNS forwarding on 127.0.0.1:53 with
-    # upstream 1.0.0.1 (Cloudflare) configured via dns_upstream_configs.
-    # resolv.conf points to 127.0.0.1, so nslookup/dig test the full path.
-
-    # Verify resolv.conf points to localhost (landscape DNS)
     local resolv
     resolv=$(guest_run "cat /etc/resolv.conf" 2>/dev/null || true)
     run_check "DNS resolver points to localhost" \
-        echo "$resolv" \| grep -q "127.0.0.1"
+        contains_text "$resolv" "127.0.0.1"
 
-    # Test actual DNS resolution from the router
     local dns_result
     dns_result=$(guest_run "nslookup www.baidu.com 2>/dev/null || host www.baidu.com 2>/dev/null" 2>/dev/null || true)
-    if echo "$dns_result" | grep -qiE '[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+'; then
+    if matches_regex_i "$dns_result" '[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+'; then
         run_check "DNS resolves www.baidu.com" true
     else
         run_skip "DNS resolves www.baidu.com" "resolution failed"
     fi
 
-    # ── 4. NAT ───────────────────────────────────────────────────────
     echo ""
     echo "---- NAT ----"
 
-    # Verify NAT rules via API
-    local nat_status
-    nat_status=$(api_get "$token" "/api/src/services/nats/status" 2>/dev/null)
-    run_check "NAT rules active (eth0)" \
-        echo "$nat_status" \| grep -q "eth0"
+    run_check "NAT rules active (${EXPECTED_WAN_IFACE})" \
+        test "$(landscape_api_service_active "$token" "nat" "$EXPECTED_WAN_IFACE" 2>/dev/null || true)" = "yes"
 
-    # Verify WAN connectivity from router (use curl; SLIRP doesn't forward ICMP)
     local wan_result
-    wan_result=$(guest_run "curl -sf --max-time 10 http://example.com" 2>&1)
-    if echo "$wan_result" | grep -qi "example"; then
+    wan_result=$(guest_run "curl -sf --max-time ${LANDSCAPE_TEST_HTTP_TIMEOUT} http://example.com" 2>&1)
+    if matches_regex_i "$wan_result" "example"; then
         run_check "Router WAN connectivity (curl example.com)" true
     else
-        # Fallback: try TCP connection
-        wan_result=$(guest_run "curl -sf --max-time 10 http://captive.apple.com" 2>&1)
+        wan_result=$(guest_run "curl -sf --max-time ${LANDSCAPE_TEST_HTTP_TIMEOUT} http://captive.apple.com" 2>&1)
         if [[ -n "$wan_result" ]]; then
             run_check "Router WAN connectivity (curl captive.apple.com)" true
         else
@@ -642,18 +405,13 @@ run_e2e_checks() {
         fi
     fi
 
-    # NAT end-to-end: SSH hop to client, test outbound internet
     info "Testing NAT: client → router → internet (SSH hop)..."
 
-    # Verify NAT forwarding by checking iptables counters on the router.
-    # Instead of SSH-hopping into the client (CirrOS boots slowly), we verify
-    # the routing path is complete from the router side.
     local ip_fwd
     ip_fwd=$(guest_run "cat /proc/sys/net/ipv4/ip_forward" 2>/dev/null)
     run_check "IP forwarding enabled" \
         test "$ip_fwd" = "1"
 
-    # ── Summary ──────────────────────────────────────────────────────
     echo ""
     echo "============================================================"
     echo "Results: ${PASS_COUNT} passed, ${FAIL_COUNT} failed, ${SKIP_COUNT} skipped"
@@ -674,39 +432,33 @@ main() {
     info "Image: ${IMAGE_PATH}"
     echo ""
 
-    # 1. Preflight
     preflight
 
-    # 2. Download CirrOS client image
     local cirros_file
     cirros_file=$(download_cirros)
 
-    # 3. Start Router VM
     start_router
-    wait_for_ssh
     setup_ssh
+    wait_for_guest_ssh "${ROUTER_PID}" "${SERIAL_LOG}" "Router" "${SSH_TIMEOUT}" || exit 2
 
-    # 4. Detect API and login
-    detect_api_base
+    detect_landscape_api_base || exit 2
     local token
-    token=$(api_login)
+    token=$(landscape_api_login)
     if [[ -z "$token" ]]; then
         error "Failed to login to Landscape API"
         exit 2
     fi
     ok "API login successful"
 
-    # 5. Wait for DHCP service to be fully active before starting client.
-    # The landscape router initializes in stages: HTTP port first, then
-    # applies init config (DHCP, NAT, etc.) after full startup. This can
-    # take 30-60s after SSH is available.
+    if ! detect_landscape_api_layout "$token"; then
+        exit 2
+    fi
+
     info "Waiting for DHCP service to become active..."
     local dhcp_ready=false
     local dhcp_wait=0
     while [[ $dhcp_wait -lt 90 ]]; do
-        local dhcp_status
-        dhcp_status=$(api_get "$token" "/api/src/services/dhcp_v4/status" 2>/dev/null || true)
-        if echo "$dhcp_status" | grep -q "eth1"; then
+        if [[ "$(landscape_api_service_active "$token" "dhcp_v4" "$EXPECTED_LAN_IFACE" 2>/dev/null || true)" == "yes" ]]; then
             dhcp_ready=true
             break
         fi
@@ -717,25 +469,22 @@ main() {
         fi
     done
     if [[ "$dhcp_ready" == "true" ]]; then
-        ok "DHCP service active on eth1 (after ${dhcp_wait}s)"
+        ok "DHCP service active on ${EXPECTED_LAN_IFACE} (after ${dhcp_wait}s)"
     else
         error "DHCP service not active after 90s — cannot run e2e tests"
         exit 2
     fi
 
-    # 7. Start Client VM
     start_client "$cirros_file"
 
-    # 8. Wait for DHCP assignment
     local client_ip
     client_ip=$(wait_for_dhcp "$token")
     if [[ -z "$client_ip" ]]; then
         error "Client did not receive DHCP — cannot run e2e tests"
-        dump_serial_log "${CLIENT_SERIAL_LOG}"
+        dump_log_tail "${CLIENT_SERIAL_LOG}" "client serial log"
         exit 2
     fi
 
-    # 8. Run E2E checks
     echo ""
     run_e2e_checks "$token" "$client_ip" 2>&1 | tee "${RESULTS_FILE}"
     local rc=${PIPESTATUS[0]}

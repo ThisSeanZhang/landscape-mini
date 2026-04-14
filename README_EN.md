@@ -2,7 +2,7 @@
 
 [![Latest Release](https://img.shields.io/github/v/release/Cloud370/landscape-mini)](https://github.com/Cloud370/landscape-mini/releases/latest)
 
-[中文](README.md) | English | [**Download Latest**](https://github.com/Cloud370/landscape-mini/releases/latest)
+[中文](README.md) | English | [Contributing](CONTRIBUTING.md) | [**Download Latest**](https://github.com/Cloud370/landscape-mini/releases/latest)
 
 Minimal x86 image builder for Landscape Router. Supports both **Debian Trixie** and **Alpine Linux** as base systems, producing small, optimized disk images (as small as ~76MB compressed) with dual BIOS+UEFI boot.
 

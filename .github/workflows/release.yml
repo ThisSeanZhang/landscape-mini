@@ -8,8 +8,9 @@ on:
 jobs:
   build-and-test:
     runs-on: ubuntu-24.04
+    timeout-minutes: 60
     strategy:
-      fail-fast: false
+      fail-fast: true
       matrix:
         include:
           - variant: default
@@ -38,7 +39,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y debootstrap parted dosfstools e2fsprogs \
             grub-efi-amd64-bin grub-pc-bin qemu-utils rsync curl \
-            sshpass socat qemu-system-x86 ovmf
+            sshpass socat jq qemu-system-x86 ovmf
 
       - name: Build Image (${{ matrix.variant }})
         run: |
@@ -59,10 +60,10 @@ jobs:
           retention-days: 5
 
       - name: Run health checks (${{ matrix.variant }})
-        run: ./tests/test-auto.sh output/*.img
+        run: timeout --foreground 20m ./tests/test-auto.sh output/*.img
 
       - name: Run E2E network tests (${{ matrix.variant }})
-        run: ./tests/test-e2e.sh output/*.img
+        run: timeout --foreground 25m ./tests/test-e2e.sh output/*.img
 
       - name: Upload test logs
         if: always()

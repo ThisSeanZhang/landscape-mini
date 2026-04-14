@@ -6,6 +6,17 @@ on:
       landscape_version:
         description: "Landscape version (latest or tag)"
         default: "latest"
+  pull_request:
+    branches:
+      - main
+    paths:
+      - build.sh
+      - build.env
+      - lib/**
+      - rootfs/**
+      - configs/**
+      - tests/**
+      - .github/workflows/ci.yml
   push:
     branches:
       - main
@@ -26,10 +37,11 @@ concurrency:
 
 jobs:
   build-and-test:
-    if: "!startsWith(github.event.head_commit.message, 'chore: release')"
+    if: "${{ github.event_name != 'push' || !startsWith(github.event.head_commit.message, 'chore: release') }}"
     runs-on: ubuntu-24.04
+    timeout-minutes: 60
     strategy:
-      fail-fast: false
+      fail-fast: true
       matrix:
         include:
           - variant: default
@@ -58,7 +70,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y debootstrap parted dosfstools e2fsprogs \
             grub-efi-amd64-bin grub-pc-bin qemu-utils rsync curl \
-            sshpass socat qemu-system-x86 ovmf
+            sshpass socat jq qemu-system-x86 ovmf
 
       - name: Build Image (${{ matrix.variant }})
         run: |
@@ -80,10 +92,10 @@ jobs:
           retention-days: 30
 
       - name: Run health checks (${{ matrix.variant }})
-        run: ./tests/test-auto.sh output/*.img
+        run: timeout --foreground 20m ./tests/test-auto.sh output/*.img
 
       - name: Run E2E network tests (${{ matrix.variant }})
-        run: ./tests/test-e2e.sh output/*.img
+        run: timeout --foreground 25m ./tests/test-e2e.sh output/*.img
 
       - name: Upload test logs
         if: always()
