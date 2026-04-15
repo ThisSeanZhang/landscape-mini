@@ -94,7 +94,8 @@ jobs:
           requested_version="${{ inputs.landscape_version }}"
           resolved_version="$requested_version"
           if [ -z "$resolved_version" ]; then
-            resolved_version="$(awk -F'"' '/^LANDSCAPE_VERSION=/{print $2; exit}' build.env)"
+            source build.env
+            resolved_version="$LANDSCAPE_VERSION"
           fi
           artifact_id="${{ inputs.variant }}-${resolved_version}-${GITHUB_SHA::12}-${GITHUB_RUN_ID}"
           {

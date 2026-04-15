@@ -49,9 +49,9 @@ jobs:
       - name: Validate promoted artifacts
         shell: bash
         run: |
-          set -euo pipefail
           shopt -s nullglob
-          expected_version="$(awk -F'"' '/^LANDSCAPE_VERSION=/{print $2; exit}' build.env)"
+          source build.env
+          expected_version="$LANDSCAPE_VERSION"
           expected_variants=(default docker alpine alpine-docker)
           found=0
           for dir in artifacts/*; do

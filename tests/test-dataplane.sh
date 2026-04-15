@@ -61,7 +61,8 @@ CLIENT_DIAGNOSTICS_FILE=""
 CLIENT_RESULTS_FILE=""
 
 resolve_default_landscape_version() {
-    awk -F'"' '/^LANDSCAPE_VERSION=/{print $2; exit}' "${PROJECT_DIR}/build.env"
+    source "${PROJECT_DIR}/build.env"
+    printf '%s\n' "${LANDSCAPE_VERSION}"
 }
 
 cleanup() {

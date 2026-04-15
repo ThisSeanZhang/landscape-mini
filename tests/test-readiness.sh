@@ -38,7 +38,8 @@ LANDSCAPE_TEST_NAME="health"
 LANDSCAPE_IMAGE_PATH="${IMAGE_PATH}"
 
 resolve_default_landscape_version() {
-    awk -F'"' '/^LANDSCAPE_VERSION=/{print $2; exit}' "${PROJECT_DIR}/build.env"
+    source "${PROJECT_DIR}/build.env"
+    printf '%s\n' "${LANDSCAPE_VERSION}"
 }
 
 cleanup() {
