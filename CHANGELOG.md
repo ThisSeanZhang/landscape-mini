@@ -24,6 +24,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Let CI inherit configurable Docker mirror settings while making chroot retry steps fail fast on command errors / 让 CI 继承可配置的 Docker 镜像源设置，并让 chroot 重试步骤在命令失败时立即终止
 - Add configurable Debian Docker source settings and retry transient package/network operations during image builds to reduce CI failures from upstream mirror instability / 为 Debian Docker 构建增加可配置的软件源设置，并对镜像构建中的易失败网络/包管理步骤增加重试，降低上游源抖动导致的 CI 失败
 - Retry Debian and Alpine Docker package installation steps during image builds so transient upstream network failures are less likely to fail CI / 在镜像构建期间为 Debian 和 Alpine 的 Docker 安装步骤增加重试，降低上游网络瞬时故障导致 CI 失败的概率
+- Use `C.UTF-8` as the default image locale so Debian and Alpine shells no longer warn about missing `en_US.UTF-8` locale data on first boot / 将镜像默认 locale 改为 `C.UTF-8`，避免 Debian 和 Alpine 首次启动时因缺少 `en_US.UTF-8` locale 数据而出现 shell 警告
 - Stop hardcoding test SSH/API credentials so custom builds and retests can validate non-default passwords consistently / 移除测试中对 SSH/API 凭据的硬编码，使自定义构建与复测能够稳定验证非默认密码
 
 ## [0.2.6] - 2026-04-14

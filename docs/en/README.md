@@ -155,7 +155,7 @@ Edit `build.env` or override values with environment variables:
 | `IMAGE_SIZE_MB` | `2048` | Initial image size (automatically shrunk later) |
 | `ROOT_PASSWORD` | `landscape` | Login password for `root` / `ld` |
 | `TIMEZONE` | `Asia/Shanghai` | Time zone |
-| `LOCALE` | `en_US.UTF-8` | System locale |
+| `LOCALE` | `C.UTF-8` | System locale |
 
 ### Custom Builds (GitHub Actions)
 

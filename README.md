@@ -155,7 +155,7 @@ setup-mirror.sh
 | `IMAGE_SIZE_MB` | `2048` | 初始镜像大小（最终会自动缩小） |
 | `ROOT_PASSWORD` | `landscape` | root / ld 登录密码 |
 | `TIMEZONE` | `Asia/Shanghai` | 时区 |
-| `LOCALE` | `en_US.UTF-8` | 系统 locale |
+| `LOCALE` | `C.UTF-8` | 系统 locale |
 
 ### 自定义构建（GitHub Actions）
 
