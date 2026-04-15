@@ -4,28 +4,23 @@ on:
   workflow_dispatch:
     inputs:
       run_id:
-        description: "Build workflow run ID (leave empty for latest CI run on main)"
+        description: "构建 workflow run ID（留空时自动使用 main 上最新成功 CI）\nBuild workflow run ID (leave empty for latest successful CI run on main)"
         default: ""
       artifact_suffix:
-        description: "Artifact suffix: <variant>-<version>-<sha12>-<runid> (leave empty to auto-resolve latest)"
+        description: "Artifact 后缀：<variant>-<version>-<sha12>-<runid>（留空时自动解析最新）\nArtifact suffix: <variant>-<version>-<sha12>-<runid> (leave empty to auto-resolve latest)"
         default: ""
       landscape_version:
-        description: "Expected Landscape version for metadata (optional)"
+        description: "用于校验 metadata 的 Landscape 版本（可选）\nExpected Landscape version for metadata (optional)"
         default: ""
       ssh_password:
-        description: "Linux SSH password for retest (plaintext, prefer CUSTOM_ROOT_PASSWORD secret)"
+        description: "复测用 Linux SSH 密码（如特别注重安全，请改用 GitHub Secrets）\nLinux SSH password for retest (if security matters, prefer GitHub Secrets)"
         default: ""
       api_username:
-        description: "Web admin username for retest (plaintext, prefer CUSTOM_API_USERNAME secret)"
+        description: "复测用 Web 管理用户名（如特别注重安全，请改用 GitHub Secrets）\nWeb admin username for retest (if security matters, prefer GitHub Secrets)"
         default: ""
       api_password:
-        description: "Web admin password for retest (plaintext, prefer CUSTOM_API_PASSWORD secret)"
+        description: "复测用 Web 管理密码（如特别注重安全，请改用 GitHub Secrets）\nWeb admin password for retest (if security matters, prefer GitHub Secrets)"
         default: ""
-      ack_plaintext_credentials:
-        description: "Set true if you intentionally provided plaintext credentials above"
-        required: true
-        default: false
-        type: boolean
 
 jobs:
   test:
@@ -42,20 +37,6 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
-      - name: Validate plaintext credential acknowledgement
-        env:
-          INPUT_SSH_PASSWORD: ${{ github.event.inputs.ssh_password }}
-          INPUT_API_USERNAME: ${{ github.event.inputs.api_username }}
-          INPUT_API_PASSWORD: ${{ github.event.inputs.api_password }}
-          INPUT_ACK_PLAINTEXT_CREDENTIALS: ${{ github.event.inputs.ack_plaintext_credentials }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          if { [ -n "$INPUT_SSH_PASSWORD" ] || [ -n "$INPUT_API_USERNAME" ] || [ -n "$INPUT_API_PASSWORD" ]; } && [ "$INPUT_ACK_PLAINTEXT_CREDENTIALS" != "true" ]; then
-            echo "Plaintext credentials were provided via workflow inputs. Re-run with ack_plaintext_credentials=true or prefer GitHub Secrets." >&2
-            exit 1
-          fi
 
       - name: Resolve retest credentials
         id: creds

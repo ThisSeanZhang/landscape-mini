@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       variant:
-        description: "Build variant"
+        description: "构建变体\nBuild variant"
         required: true
         default: default
         type: choice
@@ -14,34 +14,29 @@ on:
           - alpine
           - alpine-docker
       landscape_version:
-        description: "Landscape version (empty uses build.env default)"
+        description: "Landscape 版本（留空时使用 build.env 默认值）\nLandscape version (empty uses build.env default)"
         default: ""
       lan_server_ip:
-        description: "LAN gateway / DHCP server IP (optional)"
+        description: "LAN 网关或 DHCP 服务 IP（可选）\nLAN gateway / DHCP server IP (optional)"
         default: ""
       lan_range_start:
-        description: "LAN DHCP range start (optional)"
+        description: "LAN DHCP 起始地址（可选）\nLAN DHCP range start (optional)"
         default: ""
       lan_range_end:
-        description: "LAN DHCP range end (optional)"
+        description: "LAN DHCP 结束地址（可选）\nLAN DHCP range end (optional)"
         default: ""
       lan_netmask:
-        description: "LAN subnet prefix length, e.g. 24 (optional)"
+        description: "LAN 子网前缀长度，例如 24（可选）\nLAN subnet prefix length, e.g. 24 (optional)"
         default: ""
       root_password:
-        description: "Linux root/ld password (plaintext, prefer secret)"
+        description: "Linux root/ld 登录密码（如特别注重安全，请改用 GitHub Secrets）\nLinux root/ld password (if security matters, prefer GitHub Secrets)"
         default: ""
       api_username:
-        description: "Web admin username (plaintext, prefer secret)"
+        description: "Web 管理用户名（如特别注重安全，请改用 GitHub Secrets）\nWeb admin username (if security matters, prefer GitHub Secrets)"
         default: ""
       api_password:
-        description: "Web admin password (plaintext, prefer secret)"
+        description: "Web 管理密码（如特别注重安全，请改用 GitHub Secrets）\nWeb admin password (if security matters, prefer GitHub Secrets)"
         default: ""
-      ack_plaintext_credentials:
-        description: "Set true if you intentionally provided plaintext credentials above"
-        required: true
-        default: false
-        type: boolean
 
 jobs:
   prepare:
@@ -57,15 +52,6 @@ jobs:
       api_password: ${{ steps.creds.outputs.api_password }}
       api_credentials_source: ${{ steps.creds.outputs.api_credentials_source }}
     steps:
-      - name: Validate plaintext credential acknowledgement
-        shell: bash
-        run: |
-          set -euo pipefail
-          if { [ -n "${{ github.event.inputs.root_password }}" ] || [ -n "${{ github.event.inputs.api_username }}" ] || [ -n "${{ github.event.inputs.api_password }}" ]; } && [ "${{ github.event.inputs.ack_plaintext_credentials }}" != "true" ]; then
-            echo "Plaintext credentials were provided via workflow inputs. Re-run with ack_plaintext_credentials=true or prefer GitHub Secrets." >&2
-            exit 1
-          fi
-
       - name: Resolve variant flags
         id: flags
         shell: bash
@@ -171,9 +157,15 @@ jobs:
         shell: bash
         run: |
           cat <<'EOF' >> "$GITHUB_STEP_SUMMARY"
-          ## Credential handling
-          - Direct workflow inputs are plaintext and should only be used intentionally.
-          - Prefer repository secrets: `CUSTOM_ROOT_PASSWORD`, `CUSTOM_API_USERNAME`, `CUSTOM_API_PASSWORD`.
+          ## 凭据说明
+          - 为了方便，支持直接通过 workflow inputs 传入凭据。
+          - 如果你特别注重安全，建议优先使用仓库 Secrets：`CUSTOM_ROOT_PASSWORD`、`CUSTOM_API_USERNAME`、`CUSTOM_API_PASSWORD`。
+          - 构建 metadata 只记录凭据来源，不记录 secret 值。
+          - 当前优先级：direct inputs > secrets > defaults。
+
+          ## Credential guidance
+          - Direct workflow inputs are supported for convenience.
+          - If security matters, prefer repository secrets: `CUSTOM_ROOT_PASSWORD`, `CUSTOM_API_USERNAME`, `CUSTOM_API_PASSWORD`.
           - Build metadata records only credential sources, never secret values.
           - Current precedence: direct inputs > secrets > defaults.
           EOF

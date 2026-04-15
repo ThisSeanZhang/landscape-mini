@@ -10,12 +10,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added / 新增
 
-- Add fork-friendly `custom-build.yml` with high-value topology and credential inputs, plus explicit plaintext credential acknowledgement and secrets-first guidance / 新增面向 fork 用户的 `custom-build.yml`，支持高价值网络与凭据输入，并加入明文凭据确认和 secrets 优先指引
+- Add fork-friendly `custom-build.yml` with high-value topology and credential inputs, plus secrets-preferred guidance for security-sensitive users / 新增面向 fork 用户的 `custom-build.yml`，支持高价值网络与凭据输入，并为注重安全的用户提供 secrets 优先指引
 
 ### Changed / 变更
 
 - Rework CI around a reusable single-variant build-and-validate workflow, ship effective topology config inside artifacts, and let tests consume artifact-carried config plus injected credentials / 将 CI 重构为可复用的单变体构建验证流程，把 effective topology 配置随 artifact 一起发布，并让测试使用 artifact 自带配置与注入凭据
-- Promote GitHub releases from already-validated CI artifacts instead of rebuilding on tag pushes / 将 GitHub Release 改为基于已验证的 CI artifact 做 promotion，不再在 tag 推送时重新构建
+- Promote GitHub releases from already-validated CI artifacts instead of rebuilding on tag pushes / 将 GitHub Release 改为直接基于已验证的 CI artifact 晋级生成，不再在 tag 推送时重新构建
 
 ### Fixed / 修复
 
@@ -84,7 +84,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Added / 新增
 
 - Add Alpine Linux support as alternative base system / 新增 Alpine Linux 作为可选基础系统 (`44165b9`)
-- Add end-to-end network tests (DHCP, DNS, NAT) / 新增端到端网络测试（DHCP、DNS、NAT）(`44165b9`)
+- Add end-to-end network tests (DHCP, DNS, NAT) / 新增端到端网络测试（DHCP、DNS、NAT） (`44165b9`)
 
 ### Changed / 变更
 
