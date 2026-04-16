@@ -5,6 +5,8 @@ This file currently tracks unreleased work and recent notable changes.
 
 ## [Unreleased]
 
+## [0.2.7] - 2026-04-16
+
 ### Added / 新增
 
 - Add fork-friendly `custom-build.yml` with high-value topology and credential inputs, plus secrets-preferred guidance for security-sensitive users / 新增面向 fork 用户的 `custom-build.yml`，支持高价值网络与凭据输入，并为注重安全的用户提供 secrets 优先指引
@@ -145,7 +147,8 @@ This file currently tracks unreleased work and recent notable changes.
 - Add concurrency group to prevent duplicate CI runs / 添加并发组以防止 CI 重复运行 (`ee11fe2`)
 - Add contents write permission for release job / 为发布任务添加内容写入权限 (`97b6240`)
 
-[Unreleased]: https://github.com/Cloud370/landscape-mini/compare/v0.2.6...HEAD
+[Unreleased]: https://github.com/Cloud370/landscape-mini/compare/v0.2.7...HEAD
+[0.2.7]: https://github.com/Cloud370/landscape-mini/compare/v0.2.6...v0.2.7
 [0.2.6]: https://github.com/Cloud370/landscape-mini/compare/v0.2.5...v0.2.6
 [0.2.5]: https://github.com/Cloud370/landscape-mini/compare/v0.2.4...v0.2.5
 [0.2.4]: https://github.com/Cloud370/landscape-mini/compare/v0.2.3...v0.2.4
