@@ -21,6 +21,10 @@ on:
         required: false
         type: string
         default: ""
+      compress_output:
+        required: false
+        type: string
+        default: "no"
       config_profile:
         required: false
         type: string
@@ -298,6 +302,7 @@ jobs:
               LANDSCAPE_ADMIN_PASS="${LANDSCAPE_ADMIN_PASS}" \
               LANDSCAPE_ADMIN_PASS_SOURCE="${LANDSCAPE_ADMIN_PASS_SOURCE}" \
               RUN_TEST="none" \
+              COMPRESS_OUTPUT="${{ inputs.compress_output }}" \
               RELEASE_CHANNEL="${RELEASE_CHANNEL}" \
               RELEASE_TAG="${RELEASE_TAG}" \
               REPOSITORY_OWNER="${REPOSITORY_OWNER}" \

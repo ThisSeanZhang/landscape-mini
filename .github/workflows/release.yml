@@ -37,6 +37,7 @@ jobs:
       include_docker: 'false'
       output_formats: img,ova
       run_test: readiness,dataplane
+      compress_output: no
       release_channel: public-release
       release_tag: ${{ needs.prepare.outputs.release_tag }}
       repository_owner: ${{ github.repository_owner }}
@@ -52,6 +53,7 @@ jobs:
       include_docker: 'true'
       output_formats: img,ova
       run_test: readiness
+      compress_output: no
       release_channel: public-release
       release_tag: ${{ needs.prepare.outputs.release_tag }}
       repository_owner: ${{ github.repository_owner }}

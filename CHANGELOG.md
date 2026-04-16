@@ -7,6 +7,8 @@ This file currently tracks unreleased work and recent notable changes.
 
 ### Fixed / 修复
 
+- Stop reusable GitHub workflow builds from gzip-compressing raw `.img` outputs by default, while keeping compression available as an explicit workflow input when needed / 让可复用 GitHub workflow 构建默认不再额外 gzip 压缩 raw `.img` 产物，同时保留按需显式开启压缩的能力
+- Ensure Custom Build fixed releases always publish a compressed `.img.gz` when the latest successful build only produced a raw `.img`, so fork users keep getting the expected compressed installer asset / 确保 Custom Build 固定 release 在最新成功构建只产出 raw `.img` 时也会自动补发 `.img.gz`，让 fork 用户默认仍能拿到预期的压缩安装镜像
 - Make reusable build timeout configurable so automatic CI can keep the short limit while Custom Build gets a longer build window, and stop parsing workflow metadata via shell sourcing so Custom Build artifact capture and fixed-release publishing no longer break on values containing spaces / 让可复用构建超时支持按调用方配置，使自动 CI 保持较短限制而 Custom Build 拥有更长构建窗口，并停止通过 shell source 解析 workflow metadata，避免 Custom Build 的 artifact metadata 采集与 fixed-release 发布在字段值含空格时失败
 
 ## [0.2.7] - 2026-04-16

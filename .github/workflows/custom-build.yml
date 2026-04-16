@@ -273,43 +273,29 @@ jobs:
             echo "api_password_source=$api_password_source"
           } >> "$GITHUB_OUTPUT"
 
-      - name: Build guidance
+      - name: Prepare build summary
         shell: bash
         run: |
           set -euo pipefail
-          cat <<'EOF' >> "$GITHUB_STEP_SUMMARY"
-          ## 快速选择建议
-          - 第一次构建：`debian + false + img`
-          - 如果你要导入 PVE：`img,ova`（最终下载到的是 `.ova` 文件）
-          - `run_test` 可选：空 / `none`、`readiness`、`readiness,dataplane`
-          - `include_docker=true` 时，请求 dataplane 会被明确 skip
-
-          ## 下载与后续使用
-          - 成功后可以从固定入口 `custom-build-latest` 下载最近一次成功构建
-          - `.img` 适合 raw 写盘、手动导盘和兜底
-          - `.ova` 适合直接导入 Proxmox VE
-          - 如需不可变产物，请使用当前 workflow run 的 Artifacts
-
-          ## 凭据说明
-          - 当前优先级：direct inputs > secrets > defaults
-          - 如果你特别注重安全，优先使用仓库 Secrets：`CUSTOM_ROOT_PASSWORD`、`CUSTOM_API_USERNAME`、`CUSTOM_API_PASSWORD`
-
-          ## Quick start hints
-          - First build: `debian + false + img`
-          - For Proxmox VE import: `img,ova` (the downloadable file is `.ova`)
-          - `run_test` supports: empty / `none`, `readiness`, `readiness,dataplane`
-          - When `include_docker=true`, requested dataplane is skipped explicitly
-
-          ## Download and next steps
-          - After success, `custom-build-latest` points to the newest successful build
-          - `.img` is for raw flashing, manual disk import, and fallback workflows
-          - `.ova` is for direct Proxmox VE import
-          - If you need immutable outputs, use the Artifacts from this workflow run
-
-          ## Credential note
-          - Current precedence: direct inputs > secrets > defaults
-          - If security matters, prefer repository secrets: `CUSTOM_ROOT_PASSWORD`, `CUSTOM_API_USERNAME`, `CUSTOM_API_PASSWORD`
-          EOF
+          {
+            echo "## Custom Build 请求摘要"
+            echo "- 请求 tuple: ${{ github.event.inputs.base_system }} + docker=${{ github.event.inputs.include_docker }}"
+            echo "- 归一化 output_formats: ${{ steps.validate.outputs.output_formats }}"
+            echo "- 归一化 run_test: ${{ steps.validate.outputs.run_test || '(empty)' }}"
+            echo "- Landscape 版本输入: ${{ github.event.inputs.landscape_version || '(build.env default)' }}"
+            echo "- 配置档案: ${{ steps.meta.outputs.config_profile }}"
+            echo "- 拓扑来源: ${{ steps.meta.outputs.topology_source }}"
+            echo ""
+            echo "## 凭据来源"
+            echo "- Linux 密码来源: ${{ steps.creds.outputs.root_password_source }}"
+            echo "- Web 用户名来源: ${{ steps.creds.outputs.api_username_source }}"
+            echo "- Web 密码来源: ${{ steps.creds.outputs.api_password_source }}"
+            echo ""
+            echo "## 后续流程"
+            echo "- build job 会按上面的归一化 tuple 继续执行"
+            echo "- 成功后会发布一个会被后续成功构建覆盖的固定 release：\`custom-build-latest\`，同时保留当前 run 的不可变 Artifacts"
+            echo "- 如果请求 \`readiness,dataplane\` 且 \`include_docker=true\`，dataplane 会被明确 skip"
+          } >> "$GITHUB_STEP_SUMMARY"
 
   build:
     needs: prepare
@@ -323,6 +309,7 @@ jobs:
       output_formats: ${{ needs.prepare.outputs.output_formats }}
       run_test: ${{ needs.prepare.outputs.run_test }}
       landscape_version: ${{ github.event.inputs.landscape_version }}
+      compress_output: no
       config_profile: ${{ needs.prepare.outputs.config_profile }}
       topology_source: ${{ needs.prepare.outputs.topology_source }}
       lan_server_ip: ${{ github.event.inputs.lan_server_ip }}
@@ -427,7 +414,38 @@ jobs:
             cp "$src" "release-assets/${target}"
           done
 
+          if [ -f "release-assets/${base_name}.img" ] && [ ! -f "release-assets/${base_name}.img.gz" ]; then
+            gzip -k -f "release-assets/${base_name}.img"
+          fi
+
           cp "$metadata" release-assets/build-metadata.txt
+          fixed_produced_files=""
+          for asset in release-assets/*; do
+            name="$(basename "$asset")"
+            case "$name" in
+              build-metadata.txt|effective-landscape_init.toml)
+                continue
+                ;;
+            esac
+            if [ -n "$fixed_produced_files" ]; then
+              fixed_produced_files+=","
+            fi
+            fixed_produced_files+="$name"
+          done
+
+          if [ -z "$fixed_produced_files" ]; then
+            echo "No release assets were prepared for fixed release" >&2
+            exit 1
+          fi
+
+          tmp_metadata="$(mktemp)"
+          awk -F= -v produced_files="$fixed_produced_files" '
+            BEGIN { updated=0 }
+            /^produced_files=/ { print "produced_files=" produced_files; updated=1; next }
+            { print }
+            END { if (!updated) print "produced_files=" produced_files }
+          ' "$metadata" > "$tmp_metadata"
+          mv "$tmp_metadata" release-assets/build-metadata.txt
           if [ -f dist/metadata/effective-landscape_init.toml ]; then
             cp dist/metadata/effective-landscape_init.toml release-assets/effective-landscape_init.toml
           fi
@@ -451,7 +469,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          metadata="dist/metadata/build-metadata.txt"
+          metadata="release-assets/build-metadata.txt"
           output_formats=""
           produced_files=""
           while IFS='=' read -r key value; do
@@ -469,22 +487,42 @@ jobs:
             fi
           done
 
+          has_ova=false
+          has_img_gz=false
+          has_img=false
+          case ",$produced_files," in
+            *,*.ova,*) has_ova=true ;;
+          esac
+          case ",$produced_files," in
+            *,*.img.gz,*) has_img_gz=true ;;
+          esac
+          case ",$produced_files," in
+            *,*.img,*) has_img=true ;;
+          esac
+
           {
-            echo "## Custom Build latest output"
+            echo '## Custom Build 最新产物'
             echo "- Tag: ${RELEASE_TAG}"
             echo "- Tuple: ${{ github.event.inputs.base_system }} + docker=${{ github.event.inputs.include_docker }}"
-            echo "- Requested output formats: ${output_formats}"
-            echo "- Produced files: ${produced_files}"
-            echo "- Release page: https://github.com/${{ github.repository }}/releases/tag/${RELEASE_TAG}"
-            echo "- Direct download base: https://github.com/${{ github.repository }}/releases/download/${RELEASE_TAG}/<asset>"
-            echo "- Note: later successful Custom Build runs replace this fixed release"
-            echo ""
-            echo "### Next steps"
-            echo "- Download `.ova` if you want to import directly into Proxmox VE"
-            echo "- Download `.img` if you want raw flashing, manual disk import, or a fallback image"
-            echo "- `build-metadata.txt` records the tuple and produced files"
-            echo "- `effective-landscape_init.toml` records the resolved network config"
-            echo "- If you need immutable outputs, use this workflow run's Artifacts"
-            echo "- In Proxmox VE, verify boot mode / disk controller / bridge after import"
-            echo "- Proxmox does not reliably import CPU type=host from OVF metadata today, so set CPU type to `host` manually after import if you want it"
+            echo "- 请求的 output_formats: ${output_formats}"
+            echo "- 实际产物: ${produced_files}"
+            echo "- Release 页面: https://github.com/${{ github.repository }}/releases/tag/${RELEASE_TAG}"
+            echo "- 下载直链基址: https://github.com/${{ github.repository }}/releases/download/${RELEASE_TAG}/<asset>"
+            echo '- 注意：后续成功的 Custom Build 会覆盖这个固定 release'
+            echo ''
+            echo '### 后续使用建议'
+            if [ "$has_ova" = true ]; then
+              echo '- 下载 `.ova`：直接导入 Proxmox VE'
+            fi
+            if [ "$has_img_gz" = true ]; then
+              echo '- 下载 `.img.gz`：压缩后的 raw 安装镜像'
+            fi
+            if [ "$has_img" = true ]; then
+              echo '- 下载 `.img`：raw 写盘、手动导盘或兜底镜像'
+            fi
+            echo '- `build-metadata.txt` 记录本次 tuple 与实际产物'
+            echo '- `effective-landscape_init.toml` 记录最终生效的网络配置'
+            echo '- 如果你需要不可变产物，请使用当前 workflow run 的 Artifacts'
+            echo '- 导入 Proxmox VE 后，请检查启动模式、磁盘控制器与 bridge 绑定'
+            echo '- Proxmox 当前不会稳定从 OVF 里继承 CPU type=host；如果你需要，请在导入后手动设置'
           } >> "$GITHUB_STEP_SUMMARY"
