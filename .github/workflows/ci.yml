@@ -54,5 +54,6 @@ jobs:
       output_formats: img
       run_test: ${{ matrix.run_test }}
       landscape_version: ${{ github.event.inputs.landscape_version || '' }}
+      compress_output: no
       release_channel: public-ci
       build_timeout_minutes: 4
