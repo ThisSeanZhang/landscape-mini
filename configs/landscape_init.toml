@@ -20,6 +20,23 @@ default_router = true
 iface_name = "eth0"
 enable = true
 
+[[dns_rules]]
+name = "Landscape Router default rule"
+index = 10000
+enable = true
+filter = "unfilter"
+upstream_id = "62db13ca-bc90-4c0b-91f6-f093b35dd31b"
+source = []
+flow_id = 0
+
+[dns_rules.mark]
+allow_reuse_port = false
+flow_id = 0
+
+[dns_rules.mark.action]
+t = "keep_going"
+
+
 [[dhcpv4_services]]
 iface_name = "eth1"
 enable = true
@@ -29,6 +46,26 @@ ip_range_start = "192.168.10.2"
 ip_range_end = "192.168.10.254"
 server_ip_addr = "192.168.10.1"
 network_mask = 24
+
+[[geo_ips]]
+name = "L"
+enable = true
+
+[geo_ips.source]
+t = "url"
+url = "https://cdn.jsdelivr.net/gh/Loyalsoldier/geoip@release/geoip.dat"
+next_update_at = 1776451921089.0
+format = "dat"
+
+[[geo_sites]]
+name = "L"
+enable = true
+
+[geo_sites.source]
+t = "url"
+url = "https://cdn.jsdelivr.net/gh/Loyalsoldier/v2ray-rules-dat@release/geosite.dat"
+next_update_at = 1776451918873.0
+geo_keys = []
 
 [[route_lans]]
 iface_name = "eth1"
@@ -74,3 +111,13 @@ lan_port = 22
 [[static_nat_mappings.mapping_pair_ports]]
 wan_port = 6443
 lan_port = 6443
+
+[[dns_upstream_configs]]
+id = "62db13ca-bc90-4c0b-91f6-f093b35dd31b"
+remark = "Ali-DNS"
+ips = ["223.5.5.5", "223.6.6.6"]
+port = 53
+enable_ip_validation = false
+
+[dns_upstream_configs.mode]
+t = "plaintext"
