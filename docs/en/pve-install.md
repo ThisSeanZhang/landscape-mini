@@ -2,102 +2,86 @@
 
 [Back to README](./README.md) | [中文](../zh/pve-install.md) | English
 
-This guide is for users installing a Landscape Mini image on **Proxmox VE (PVE)** for the first time. It walks through the process step by step from scratch.
+## When to Use This
 
-## Read this first
+This document covers only two things:
 
-If you just want to get it running as quickly as possible, **prefer using a prebuilt image from the repository Release first**.
+- importing a ready-made image into PVE
+- importing an image you built yourself into PVE
 
-Only use the [Custom Build Guide](./custom-build.md) when one of the following applies:
-
-- You need a custom subnet
-- You need to change LAN / DHCP parameters
-- You need to customize passwords, accounts, or other build parameters
-
-Recommended order:
-
-1. If the official Release image works for your case, install it directly first
-2. If you need custom network parameters, use `Custom Build`
-3. By default, the recommended choice is a build **with Docker included**
-4. Prefer `output_formats=img,ova`
-5. In PVE, prefer **OVA import** first
-6. If OVA is not convenient, manually import `.img` / `.img.gz` instead
+If you have not built an image yet, start with the [Custom Build Guide](./custom-build.md).
 
 ---
 
-## 1. Recommended build choice
+## Pick a Path First
 
-If this is your first time using it, the recommended selection in `Custom Build` is:
+| Your situation | Go to |
+|---|---|
+| Using the repository Release directly | See “Recommended Path” below |
+| You already have `.ova` | See “Method 1: Import OVA by URL” |
+| You already have `.img` / `.img.gz` | See “Method 2: Manual `.img` / `.img.gz` import” |
+
+## Recommended Path
+
+1. If the repository Release image works for your case, install it directly first
+2. If you need custom parameters, use the [Custom Build Guide](./custom-build.md)
+3. For a first custom build, use `base_system=debian`, `include_docker=true`, `output_formats=img,ova`
+4. In PVE, prefer `.ova` import; if that is inconvenient, use `.img` / `.img.gz`
+
+## Recommended Build Choice
+
+If this is your first time, use:
 
 - `base_system=debian`
 - `include_docker=true`
 - `output_formats=img,ova`
 
-Why this is recommended:
+Reasons:
 
-- `debian` is generally more stable in terms of compatibility and is a good default choice
-- `include_docker=true` matches common real-world usage better and avoids installing Docker later
-- `img,ova` produces both:
-  - `.ova`: convenient for one-click import in PVE
-  - `.img`: useful for manual import and fallback troubleshooting
+- `base_system=debian`: default recommendation
+- `include_docker=true`: avoids installing Docker later
+- `output_formats=img,ova`: keeps both `.ova` import and `.img` manual import paths
 
-> If you do not need custom network parameters, prefer using a prebuilt image from the repository Release directly.  
-> If you are using `Custom Build`, copy the download link from your own workflow artifact or fixed release page.
+> If you do not need custom parameters, prefer the prebuilt image from the repository Release.
 
 ---
 
-## 2. Before you begin
+## Before You Start
 
-Please make sure:
+Please confirm:
 
-- You have a working PVE node
-- You already have the build output:
-  - Recommended: `.ova`
-  - Fallback: `.img` or `.img.gz`
-- You know which storage pool to import into
-- You can log in to the PVE Web UI
-- If you are using manual import, you can also log in to the PVE host over SSH
+- you have a working PVE node
+- you already have the build output: recommended `.ova`, fallback `.img` / `.img.gz`
+- you know which storage pool to import into
+- you can log in to the PVE Web UI
+- if you are using manual import, you can also log in to the PVE host over SSH
 
 ---
 
-## 3. Very important: NIC model must match when using multiple NICs
+## With Multiple NICs, NIC Types Must Match
 
-If your VM has multiple NICs, make sure their **NIC model is consistent**.
+If the VM has multiple NICs, make sure they use the same model, for example all `E1000` or all `VirtIO`.
 
-For example:
+If NIC models are mixed, you may see:
 
-- all `E1000`
-- or all `VirtIO`
-- or all the same other model
+- WAN / LAN order reversed
+- `eth0` missing an IP address
+- `eth0` / `eth1` order not matching your expectation
 
-### Why must they match?
+How to fix it:
 
-If multiple NICs use different models, interface ordering inside the system may become inconsistent. For example:
-
-- You expect WAN to be `eth0`
-- But after boot, the LAN / WAN order is reversed
-- The final result may look like this:
-  - `eth0` in `ip a` does not get an IP address
-  - or the `eth0` / `eth1` order does not match expectations
-
-### How do I fix this if it happens?
-
-To fix it:
-
-1. Open the VM's **Hardware** page in PVE
+1. Open the VM’s **Hardware** page in PVE
 2. Check the model/type of all NICs
-3. Change them to the **same model**
+3. Change them to the same model
 4. **Restart the VM**
 
-> Mixing different NIC models is currently not recommended, because it can easily cause interface ordering issues.
-
 ---
 
-## 4. Method 1: Import OVA directly by URL (recommended)
+## Method 1: Import OVA by URL
 
-The preferred approach is to use the `.ova` download link from the repository's official Release directly.
+Prefer the official Release `.ova` download link from this repository.
 
-If you are using `Custom Build`, go to your own workflow artifact or fixed release page and copy the `.ova` download link there.
+If you are using `Custom Build`, copy the `.ova` download link from your own workflow artifact page or fixed release page.
 
 ### Step 1: Confirm the storage pool allows import
 
@@ -105,16 +89,12 @@ Go to:
 
 **Datacenter -> Storage -> target storage entry (for example `local`)**
 
-Click Edit and make sure the storage has these content types enabled:
+Click Edit and make sure **Content** includes:
 
 - `Import`
 - `Disk image`
 
-Both must be enabled, otherwise the import may fail.
-
----
-
-### Step 2: Open the storage import page
+### Step 2: Open the import page
 
 Go to:
 
@@ -122,101 +102,69 @@ Go to:
 
 Find the **Download from URL / Import** entry.
 
----
+### Step 3: Paste the download link
 
-### Step 3: Copy the download link
+- Official Release: copy the download link of the target `.ova`
+- Custom Build: copy the `.ova` download link from your own workflow artifact page or fixed release page
 
-If you are using the official Release, copy the download link for the target `.ova` file directly.
+Then paste the link into the PVE URL import field.
 
-Then paste that link into the PVE URL import field.
+### Step 4: Run the import
 
-If you are using `Custom Build`:
-
-- Go to your own workflow artifact page or fixed release page
-- Find the corresponding `.ova` file
-- Copy its download link into PVE
-
----
-
-### Step 4: Start download and import
-
-After confirming the target storage, run the import.
-
-When it finishes, PVE will have an image file that can be used by a VM.
-
----
+Confirm the target storage, then start the import.
 
 ### Step 5: Check the imported VM configuration
 
-After the import finishes, it is recommended to check:
+Check at least:
 
 - boot mode
 - disk controller
-- bridge assignment
+- bridge binding
 - CPU type
 - NIC model
 
 Notes:
 
-- For **older CPUs**, `host` mode is usually the preferred choice for compatibility
-- If you want CPU type `host`, set it manually after import
-- PVE currently does not reliably inherit `CPU type=host` from OVF/OVA metadata
+- on older CPUs, you may want to set `CPU type=host` manually
+- PVE does not reliably inherit `CPU type=host` from OVF/OVA metadata
 
 ---
 
-## 5. Method 2: Manually import `.img` or `.img.gz`
+## Method 2: Manual `.img` or `.img.gz` Import
 
-If you do not want to use OVA, or OVA import is not convenient, you can import the raw image instead.
+If you do not want to use OVA, or OVA import is inconvenient, use raw image import.
 
 ### Step 1: Create the VM in PVE first
 
 When creating the VM:
 
-- Fill in the VM name, ID, and other settings normally
-- **Do not add a disk**
-- For the other settings, you can keep the defaults or use your preferred values
+- fill in the VM name, ID, and other settings normally
+- **do not add a disk**
+- keep the other settings as defaults or adjust them as needed
 
-Key point:
+### Step 2: Put `.img` or `.img.gz` on the PVE host
 
-- **Do not select a disk when creating the VM**
-- We will manually import the `.img` afterward
+Common methods:
 
----
+#### Method A: Download directly on the PVE host
 
-### Step 2: Put the `.img` or `.img.gz` file on the PVE host
-
-There are two common methods.
-
-#### Method A: Download it directly on the PVE host
-
-If you are using the official Release, first copy the official `.img.gz` download link, then SSH into the PVE host and run:
+If you are using the official Release, copy the `.img.gz` download link, then SSH into the PVE host and run:
 
 ```bash
 wget -O landscape-mini.img.gz "<official Release download URL>"
 ```
 
-If you are using `Custom Build`, copy the `.img` / `.img.gz` download link from your own workflow artifact or fixed release page, then use the same download steps.
+If you are using `Custom Build`, copy the `.img` / `.img.gz` download link from your own workflow artifact page or fixed release page, then use the same download flow.
 
-If the downloaded file is `.img.gz`, decompress it first:
+If the file is `.img.gz`, decompress it first:
 
 ```bash
 gunzip -f landscape-mini.img.gz
 ```
 
-After decompression, you will get:
+#### Method B: Upload manually from your local machine
 
-- `landscape-mini.img`
-
-If you downloaded `.img` directly, no decompression is needed.
-
-#### Method B: Upload it manually from your local machine
-
-You can upload it to any directory on the PVE host using:
-
-- `scp`
-- `rsync`
-- an SFTP tool
-- any other upload method you prefer
+You can also upload it to the PVE host with `scp`, `rsync`, SFTP, or any other method you prefer.
 
 For example:
 
@@ -224,13 +172,11 @@ For example:
 scp landscape-mini.img root@<pve-host>:/root/
 ```
 
-If you upload `.img.gz`, decompress it on the PVE host afterward:
+If you uploaded `.img.gz`, decompress it afterward:
 
 ```bash
 gunzip -f /root/landscape-mini.img.gz
 ```
-
----
 
 ### Step 3: Import the disk into PVE
 
@@ -252,15 +198,13 @@ Where:
 - `/path/to/landscape-mini.img`: image path
 - `<storage>`: target storage pool name
 
----
-
 ### Step 4: Attach the imported disk in the VM hardware page
 
 Go back to the PVE Web UI:
 
 **VM -> Hardware**
 
-Find the imported disk and attach it to the position you want to use (for example `scsi0` or `sata0`).
+Find the imported disk and attach it to the slot you want to use, for example `scsi0` or `sata0`.
 
 Then set:
 
@@ -269,41 +213,32 @@ Then set:
 
 ---
 
-## 6. First boot checks
+## First Boot Checks
 
-After starting the VM, it is recommended to check the following first.
-
-### 1. Is the NIC order correct?
-
-Run:
+After starting the VM, run:
 
 ```bash
 ip a
 ```
 
-Pay special attention to:
+Focus on:
 
 - whether `eth0` got the expected IP address
 - whether `eth1` matches the other NIC you intended
 - whether WAN / LAN match your bridge wiring and configuration
 
-If you see:
-
-- `eth0` has no IP
-- or the `eth0` / `eth1` order is unexpected
-
-Go back to PVE and first check whether all NICs use the same model.
+If `eth0` has no IP, or the `eth0` / `eth1` order looks wrong, first check whether all NICs use the same model.
 
 ---
 
-## 7. Disk expansion
+## Disk Expansion
 
 Landscape Mini automatically expands the root partition to the current disk size at boot.
 
 This means:
 
 - on the **first boot**, it expands to the current disk size automatically
-- if you enlarge the disk later in PVE, it will continue expanding on the **next reboot**
+- if you enlarge the disk later in PVE, it expands again on the **next reboot**
 
 ### How to expand the disk in PVE
 
@@ -311,29 +246,23 @@ Go to:
 
 **VM -> Hardware -> select disk -> Disk Action -> Resize**
 
-Enter the amount of extra space you want to add, for example:
+For example, you can start by adding:
 
-- it is recommended to add **16G** first
+- **16G**
 
-If you need more later, you can expand it again.
+### Note
 
-### Notes
+Hot expansion is **not applied immediately**.
 
-Hot expansion is **not currently applied immediately**.
-
-That means:
-
-- after resizing the disk in PVE
-- you need to **restart the VM**
-- the expansion will only take effect on the next boot
+After resizing the disk in PVE, you need to **restart the VM** before the expansion takes effect.
 
 ---
 
-## 8. FAQ
+## FAQ
 
-### 1. Why does URL import fail in PVE?
+### Why does URL import fail?
 
-First make sure the target storage has these content types enabled:
+First confirm the target storage has these content types enabled:
 
 - `Import`
 - `Disk image`
@@ -342,7 +271,7 @@ Path:
 
 **Datacenter -> Storage -> target storage entry (for example `local`) -> Edit -> Content**
 
-### 2. What should I do if I get this error?
+### What should I do if I get this error?
 
 ```text
 sata0: import working storage 'local' does not support 'images' content type or is not filebased
@@ -355,53 +284,39 @@ This usually means:
 
 How to fix it:
 
-1. Go to  
-   **Datacenter -> Storage -> local -> Edit**
-2. Make sure these content types are enabled:
-   - `Import`
-   - `Disk image`
-3. If it still fails, use a directory-based storage that supports file-based import, or switch to manual `.img` import instead
+1. Go to **Datacenter -> Storage -> local -> Edit**
+2. Make sure **Content** includes `Import` and `Disk image`
+3. If it still fails, switch to a directory-based storage that supports file-based import, or use manual `.img` import instead
 
-### 3. Why does `eth0` in `ip a` not have an IP address after boot?
+### Why does `eth0` not have an IP after boot?
 
 Check these first:
 
 - whether the VM has multiple NICs
 - whether all NICs use the same model
 
-If they are mixed, for example:
-
-- one `E1000`
-- one `VirtIO`
-
-then you may get:
-
-- `eth0` / `eth1` order mismatch
-- `eth0` not receiving the expected IP
+If NIC models are mixed, you may get `eth0` / `eth1` order issues, or `eth0` may fail to get the expected IP address.
 
 How to fix it:
 
 1. Change all NICs to the same model
 2. Restart the VM
-3. Run `ip a` again and check the result
+3. Run `ip a` again
 
-### 4. What should I check after OVA import?
+### What should I still check after OVA import?
 
-At minimum, check:
+Check at least:
 
 - boot mode
 - disk controller
-- bridge assignment
+- bridge binding
 - CPU type
-- whether all NICs use the same model
+- whether NIC types are consistent
 
-For older CPUs, it is recommended to set CPU type to `host` manually first.
+On older CPUs, it is usually worth setting `CPU type=host` manually.
 
-### 5. Why does the disk size not increase immediately after import?
+### Why does the disk size not increase immediately after import?
 
 Because expansion currently takes effect **at boot time**.
 
-If you just used Resize in PVE:
-
-- you need to restart the VM
-- then the expansion will happen automatically on the next boot
+If you just resized the disk in PVE, restart the VM and the expansion will be applied on the next boot.

@@ -8,24 +8,21 @@ Landscape Router 的最小化 x86 镜像构建器。支持 **Debian Trixie** 和
 
 上游项目：[Landscape Router](https://github.com/ThisSeanZhang/landscape)
 
-## 先看这里
+## 按目标阅读
 
-如果你只是想**快速体验 Landscape**：
+| 你的目标 | 直接去 |
+|---|---|
+| 直接下载现成镜像 | [Release 页面](https://github.com/Cloud370/landscape-mini/releases/latest) |
+| 自定义网络 / 密码 / 版本 / 输出格式 | [Custom Build 使用说明](./custom-build.md) |
+| 在 PVE 中导入 / 安装 | [PVE 安装引导](./pve-install.md) |
+| 本地构建 / 测试 / 调试 | 继续看本文 |
+| English docs | [docs/en/README.md](../en/README.md) |
 
-- 直接去 [Release 页面下载预编译镜像](https://github.com/Cloud370/landscape-mini/releases/latest)
+## 推荐路径
 
-如果你想**做一份自己的镜像**，例如修改：
-
-- LAN / DHCP 网段
-- Linux 登录密码
-- Web 管理用户名和密码
-
-推荐优先使用：
-
-- [Custom Build 使用说明](./custom-build.md)
-- [PVE 安装引导](./pve-install.md)
-
-如果你要开发或调试构建系统本身，再看下面的本地构建说明。
+- 只想装起来：Release → [PVE 安装引导](./pve-install.md)
+- 需要改网络、密码或版本：[Custom Build 使用说明](./custom-build.md) → [PVE 安装引导](./pve-install.md)
+- 要改仓库代码：继续看下方“本地开发”，再看 [CONTRIBUTING.md](../../CONTRIBUTING.md)
 
 ## 特性
 

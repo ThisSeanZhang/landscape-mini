@@ -4,54 +4,51 @@
 
 English | [中文](../zh/README.md) | [Contributing](../../CONTRIBUTING.md) | [Download Latest Image](https://github.com/Cloud370/landscape-mini/releases/latest)
 
-A minimal x86 image builder for Landscape Router. It supports both **Debian Trixie** and **Alpine Linux** as base systems, produces compact disk images, and supports dual BIOS + UEFI boot.
+Landscape Mini is a minimal x86 image builder for Landscape Router. It supports **Debian Trixie** and **Alpine Linux**, can produce `img` / `vmdk` / `ova`, and supports both BIOS and UEFI boot.
 
 Upstream project: [Landscape Router](https://github.com/ThisSeanZhang/landscape)
 
-## Start Here
+## Read by Goal
 
-If you just want to **try Landscape quickly**:
+| Your goal | Go to |
+|---|---|
+| Download a ready-made image | [Release page](https://github.com/Cloud370/landscape-mini/releases/latest) |
+| Customize network / passwords / version / output formats | [Custom Build Guide](./custom-build.md) |
+| Import / install on PVE | [PVE Installation Guide](./pve-install.md) |
+| Build / test / debug locally | Continue reading this page |
+| 中文文档 | [docs/zh/README.md](../zh/README.md) |
 
-- Download a prebuilt image from the [latest release](https://github.com/Cloud370/landscape-mini/releases/latest)
+## Recommended Paths
 
-If you want to **build a customized image**, for example to change:
-
-- LAN / DHCP subnet settings
-- Linux login password
-- Web management username and password
-
-Start with:
-
-- [Custom Build Guide](./custom-build.md)
-- [PVE Installation Guide](./pve-install.md)
-
-If you are developing or debugging the build system itself, continue with the local build instructions below.
+- Just want to get it running: Release → [PVE Installation Guide](./pve-install.md)
+- Need to change network, passwords, or version: [Custom Build Guide](./custom-build.md) → [PVE Installation Guide](./pve-install.md)
+- Want to modify this repository: continue with "Local Development" below, then read [CONTRIBUTING.md](../../CONTRIBUTING.md)
 
 ## Features
 
 - Supports both Debian and Alpine as base systems
-- Build identity is explicit: `base_system + include_docker + output_formats`
+- Build identity is explicitly defined as `base_system + include_docker + output_formats`
 - Output formats include `img`, `vmdk`, and `ova`
-- Supports both BIOS and UEFI for broad virtualization compatibility
-- Fork users can run customized builds directly on GitHub
-- GitHub Actions workflows are already set up for automated build, test, and release
+- Supports both BIOS and UEFI boot
+- Fork users can run custom builds directly on GitHub
+- GitHub Actions is already set up for build, test, and release
 
 ## Local Development
 
-If you plan to build locally, debug issues, or validate changes before pushing them, start here.
+If you already know you want to build locally, debug, or validate unpushed changes, start here.
 
 ### Local Build
 
-Local configuration is now layered with this precedence:
+Local configuration is layered with this precedence:
 
 `build.env < build.env.<profile> < build.env.local < explicit environment variables`
 
 Recommended usage:
 
 - `build.env`: repository defaults, kept tracked
-- `build.env.local`: private machine-specific overrides for passwords, LAN/DHCP, or local test selection
-- `build.env.<profile>`: reusable profile-specific overrides such as `lab` or `pve`
-- explicit environment variables: one-off overrides such as `LANDSCAPE_ADMIN_USER=bar make build`
+- `build.env.local`: private machine-specific overrides, suitable for passwords, LAN/DHCP, or local test toggles
+- `build.env.<profile>`: scenario-specific profiles such as `lab` or `pve`
+- explicit environment variables: one-off overrides, for example `LANDSCAPE_ADMIN_USER=bar make build`
 
 ```bash
 # Install build dependencies (first time only)
@@ -66,7 +63,7 @@ BUILD_ENV_PROFILE=lab make build
 # Local private overrides: build.env.local
 make build
 
-# Explicit overrides still win over env files
+# Explicit overrides still have the highest precedence
 LANDSCAPE_ADMIN_USER=admin RUN_TEST=readiness make build
 
 # Alpine raw image
@@ -76,7 +73,7 @@ make build BASE_SYSTEM=alpine
 make build INCLUDE_DOCKER=true OUTPUT_FORMATS=img,ova
 ```
 
-Common local customization inputs now include:
+Common local customization inputs include:
 
 - `LANDSCAPE_ADMIN_USER` / `LANDSCAPE_ADMIN_PASS`
 - `LANDSCAPE_LAN_SERVER_IP` / `LANDSCAPE_LAN_RANGE_START` / `LANDSCAPE_LAN_RANGE_END` / `LANDSCAPE_LAN_NETMASK`
@@ -92,14 +89,14 @@ make test
 # Dataplane tests only apply to include_docker=false raw images
 make test-dataplane
 
-# Or run validation automatically after a build
+# You can also run validation automatically after a build
 RUN_TEST=readiness make build
 RUN_TEST=readiness,dataplane make build
 
-# When INCLUDE_DOCKER=true, requested dataplane is skipped explicitly
+# When INCLUDE_DOCKER=true, requested dataplane is skipped explicitly and recorded as a skip marker
 INCLUDE_DOCKER=true RUN_TEST=readiness,dataplane make build
 
-# Or point tests at any raw image directly
+# You can also point tests at any raw image directly
 ./tests/test-readiness.sh output/landscape-mini-x86-alpine.img
 ./tests/test-dataplane.sh output/landscape-mini-x86-debian.img
 
@@ -123,14 +120,14 @@ Start with:
 
 ### Cloud Server (dd Script)
 
-Use the [reinstall](https://github.com/bin456789/reinstall) script to write the custom image onto a cloud server:
+Use the [reinstall](https://github.com/bin456789/reinstall) script to write the custom image to a cloud server:
 
 ```bash
 bash <(curl -sL https://raw.githubusercontent.com/bin456789/reinstall/main/reinstall.sh) \
     dd --img='https://github.com/Cloud370/landscape-mini/releases/latest/download/landscape-mini-x86-debian.img.gz'
 ```
 
-> The root partition automatically expands on first boot to fill the entire disk. No manual intervention is required.
+> The root partition automatically expands on first boot to fill the whole disk.
 
 ## Default Credentials
 
@@ -140,11 +137,11 @@ bash <(curl -sL https://raw.githubusercontent.com/bin456789/reinstall/main/reins
 | SSH / system login | `ld` | `landscape` |
 | Web UI | `root` | `root` |
 
-> `custom-build.yml` can override Linux and Web UI credentials through workflow inputs or GitHub Secrets. Plaintext inputs are fine for temporary personal use; if security matters, prefer `CUSTOM_ROOT_PASSWORD`, `CUSTOM_API_USERNAME`, and `CUSTOM_API_PASSWORD`.
+> `custom-build.yml` can override Linux / Web UI credentials through workflow inputs or GitHub Secrets. Plaintext inputs are fine for temporary personal use; if security matters, prefer `CUSTOM_ROOT_PASSWORD`, `CUSTOM_API_USERNAME`, and `CUSTOM_API_PASSWORD`.
 
 ## Build Configuration
 
-Avoid treating tracked `build.env` as the primary place for day-to-day customization. Prefer:
+Avoid using tracked `build.env` as the day-to-day customization entry point. Prefer:
 
 - `build.env.local`
 - `build.env.<profile>`
@@ -155,7 +152,7 @@ Avoid treating tracked `build.env` as the primary place for day-to-day customiza
 |------|--------|------|
 | `BASE_SYSTEM` | `debian` | Base system: `debian` / `alpine` |
 | `INCLUDE_DOCKER` | `false` | Include Docker: `true` / `false` |
-| `OUTPUT_FORMATS` | `img` | Ordered output formats: `img`, `vmdk`, `ova` (comma-separated) |
+| `OUTPUT_FORMATS` | `img` | Output formats: `img`, `vmdk`, `ova` (comma-separated) |
 | `RUN_TEST` | _(empty)_ | Local test selection: empty / `none`, `readiness`, `readiness,dataplane` |
 | `LANDSCAPE_ADMIN_USER` | `root` | Web admin username |
 | `LANDSCAPE_ADMIN_PASS` | `root` | Web admin password |
@@ -163,21 +160,21 @@ Avoid treating tracked `build.env` as the primary place for day-to-day customiza
 | `LANDSCAPE_LAN_RANGE_START` | _(empty)_ | LAN DHCP range start |
 | `LANDSCAPE_LAN_RANGE_END` | _(empty)_ | LAN DHCP range end |
 | `LANDSCAPE_LAN_NETMASK` | _(empty)_ | LAN subnet prefix length, for example `24` |
-| `APT_MIRROR` | _(auto probe)_ | Explicit Debian package mirror override; if empty, probe candidates |
-| `ALPINE_MIRROR` | _(auto probe)_ | Explicit Alpine package mirror override; if empty, probe candidates |
-| `DOCKER_APT_MIRROR` | _(auto probe)_ | Explicit Debian Docker APT repository override |
-| `DOCKER_APT_GPG_URL` | _(auto probe)_ | Explicit Debian Docker APT GPG URL override |
+| `APT_MIRROR` | _(auto probe)_ | Explicit Debian package mirror override; if empty, candidates are auto-detected |
+| `ALPINE_MIRROR` | _(auto probe)_ | Explicit Alpine package mirror override; if empty, candidates are auto-detected |
+| `DOCKER_APT_MIRROR` | _(auto probe)_ | Explicit Debian Docker APT repository override; if empty, candidates are auto-detected |
+| `DOCKER_APT_GPG_URL` | _(auto probe)_ | Explicit Debian Docker APT GPG key URL override; if empty, candidates are auto-detected |
 | `LANDSCAPE_VERSION` | `v0.18.2` | Upstream Landscape version |
 | `LANDSCAPE_REPO` | `https://github.com/ThisSeanZhang/landscape` | Upstream Landscape release repository |
-| `IMAGE_SIZE_MB` | `2048` | Initial image size (automatically shrunk later) |
+| `IMAGE_SIZE_MB` | `2048` | Initial image size (shrunk automatically later) |
 | `ROOT_PASSWORD` | `landscape` | Login password for `root` / `ld` |
 | `TIMEZONE` | `Asia/Shanghai` | Time zone |
 | `LOCALE` | `C.UTF-8` | Default system locale |
 | `EXTRA_LOCALES` | `en_US.UTF-8` | Additional Debian UTF-8 locales to generate |
 
-### Custom Builds (GitHub Actions)
+### Custom Build (GitHub Actions)
 
-The repository provides `custom-build.yml` as a tuple-based build entry point for fork users. It supports:
+The repository provides `custom-build.yml` as an explicit-tuple build entry point for fork users. It supports:
 
 - `base_system`: `debian` / `alpine`
 - `include_docker`: `true` / `false`
@@ -190,17 +187,17 @@ The repository provides `custom-build.yml` as a tuple-based build entry point fo
 
 Current precedence: **direct inputs > secrets > defaults**.
 
-The workflow now validates inputs first, so invalid `output_formats` / `run_test` values and basic network input mistakes fail before the build starts.
+The workflow validates inputs first, catching invalid `output_formats`, `run_test`, and basic network input errors before the build starts.
 
-The shared test contract is now:
+The unified test contract is:
 
 - empty / `none`: build only
 - `readiness`
 - `readiness,dataplane`
 
-When `include_docker=true`, requested dataplane is skipped explicitly with a reason in the logs.
+When `include_docker=true`, requested dataplane is explicitly skipped with a reason in the logs.
 
-The workflow writes the following build identity fields into `build-metadata.txt`:
+The workflow writes the following identity fields into `build-metadata.txt`:
 
 - `base_system`
 - `include_docker`
@@ -210,10 +207,10 @@ The workflow writes the following build identity fields into `build-metadata.txt
 - `artifact_id`
 - `release_channel`
 
-The effective network topology is carried inside the artifact as `effective-landscape_init.toml` and is consumed by `test.yml`, fixed-release publishing, and tag release rebuild validation.
+The effective network topology is shipped inside the artifact as `effective-landscape_init.toml` for `test.yml`, fixed-release publishing, and tag release rebuild validation.
 
-Successful Custom Build runs also publish to a fixed tag in the fork: `custom-build-latest`.
-It is a moving pointer to the latest successful Custom Build rather than a per-tuple permanent download slot; later successful runs overwrite it regardless of tuple (for example Debian / Alpine, Docker / non-Docker).
+Successful Custom Build runs also publish to the fixed tag `custom-build-latest` in the fork.
+It is a moving pointer to the latest successful Custom Build rather than a per-tuple permanent download slot; any later successful build overwrites it.
 
 - Release page: `https://github.com/<owner>/landscape-mini/releases/tag/custom-build-latest`
 - Direct download base: `https://github.com/<owner>/landscape-mini/releases/download/custom-build-latest/<asset>`
@@ -224,18 +221,18 @@ If you need immutable per-build outputs, use the Artifacts from that workflow ru
 
 ### Readiness Checks
 
-`make test` or `./tests/test-readiness.sh <image.img>` run the shared router readiness contract:
+`make test` or `./tests/test-readiness.sh <image.img>` runs the shared router readiness contract:
 
-1. Copy the image to a temporary file (protect the build artifact)
-2. Start QEMU in the background (auto-detect KVM)
+1. Copy the image to a temporary file to protect the build artifact
+2. Start QEMU in the background and auto-detect KVM
 3. Wait for SSH, API listener, API login, and layout detection
-4. Verify `eth0` / `eth1` and core services reach running state
+4. Verify `eth0` / `eth1` and core services reach the running state
 5. When `include_docker=true`, additionally verify Docker is available
 6. Emit readiness / service / diagnostics snapshots and clean up QEMU
 
 ### Dataplane Tests
 
-`make test-dataplane` or `./tests/test-dataplane.sh <image.img>` validate real client-visible dataplane behavior with a two-VM topology:
+`make test-dataplane` or `./tests/test-dataplane.sh <image.img>` validates real client-visible dataplane behavior with a two-VM topology:
 
 ```text
 Router VM (eth0=WAN/SLIRP, eth1=LAN/mcast) ←→ Client VM (CirrOS, eth0=mcast)
@@ -247,16 +244,16 @@ Coverage includes DHCP lease assignment, lease visibility in the Router API, and
 
 ## CI/CD
 
-- **CI**: Manual runs are always available. Automatic `push main` / `PR -> main` runs now trigger only for shell or CI execution logic changes.
-- **Fork protection**: automatic events in forks are skipped by default instead of actually running CI; manual dispatch remains available.
+- **CI**: Manual runs are always available. Automatic `push main` / `PR -> main` runs trigger only when shell or CI execution logic changes.
+- **Fork protection**: automatic events in forks are skipped by default; manual dispatch remains available.
 - **Automatic CI validation surface**: only `debian + include_docker=false`, requesting raw `img` only.
 - **Readiness / dataplane coverage**: automatic CI runs `readiness,dataplane` for `include_docker=false`.
 - **Artifact contract**: every image artifact includes raw `.img`, `build-metadata.txt`, and `effective-landscape_init.toml`; automatic CI no longer exports `.vmdk` / `.ova`.
-- **Custom Build**: `custom-build.yml` lets fork users build explicit tuples, validates inputs early, and gives clearer download/import guidance after success.
-- **Manual Retest**: `test.yml` retests the Debian default public tuples by `run_id` or `artifact_id`, with SSH / API credentials passed in again.
+- **Custom Build**: `custom-build.yml` lets fork users build explicit tuples, validates inputs early, and provides clearer download / import guidance.
+- **Manual Retest**: `test.yml` retests the Debian default public tuple by `run_id` or `artifact_id`, with SSH / API credentials passed in again.
 - **Release**: when a `v*` tag is pushed, `release.yml` rebuilds Debian Docker / non-Docker artifacts from that tagged commit instead of promoting CI artifacts, and publishes the default public surface: `.img.gz` + `.ova`.
 - **Alpine**: Alpine is no longer part of the default public release surface; use `Custom Build` when you need it.
 
 ## License
 
-This project is released under **GPL-3.0**, consistent with the upstream [Landscape Router](https://github.com/ThisSeanZhang/landscape).
+This project is released under **GPL-3.0**, consistent with upstream [Landscape Router](https://github.com/ThisSeanZhang/landscape).

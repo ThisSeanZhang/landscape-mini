@@ -4,41 +4,50 @@
 
 [English](./docs/en/README.md) | 中文 | [贡献流程](./CONTRIBUTING.md) | [**下载最新镜像**](https://github.com/Cloud370/landscape-mini/releases/latest)
 
-Landscape Router 的最小化 x86 镜像构建器。支持 **Debian Trixie** 和 **Alpine Linux** 两种基础系统，可生成精简磁盘镜像，并支持 BIOS + UEFI 双启动。
+Landscape Router 的最小化 x86 镜像构建器，支持 **Debian Trixie** / **Alpine Linux**，可生成 `img` / `vmdk` / `ova`，支持 BIOS + UEFI。
 
 上游项目：[Landscape Router](https://github.com/ThisSeanZhang/landscape)
 
-## 先看这里
+## 从这里开始
 
-如果你只是想**快速体验 Landscape**：
+| 你的目标 | 直接去 |
+|---|---|
+| 直接下载现成镜像 | [Release 页面](https://github.com/Cloud370/landscape-mini/releases/latest) |
+| 自定义网络 / 密码 / 版本 / 输出格式 | [Custom Build 使用说明](./docs/zh/custom-build.md) |
+| 在 PVE 中导入 / 安装 | [PVE 安装引导](./docs/zh/pve-install.md) |
+| 本地构建 / 测试 / 调试 | [中文主文档](./docs/zh/README.md) |
+| English docs | [docs/en/README.md](./docs/en/README.md) |
 
-- 直接去 [Release 页面下载预编译镜像](https://github.com/Cloud370/landscape-mini/releases/latest)
+## 推荐路径
 
-如果你想**做一份自己的镜像**，例如修改：
+### 我只想装起来
 
-- LAN / DHCP 网段
-- Linux 登录密码
-- Web 管理用户名和密码
+1. 下载 [Release 镜像](https://github.com/Cloud370/landscape-mini/releases/latest)
+2. 如果在 PVE 中使用，继续看 [PVE 安装引导](./docs/zh/pve-install.md)
 
-推荐优先使用：
+### 我想改网络、密码或版本
 
-- [Custom Build 使用说明](./docs/zh/custom-build.md)
-- [PVE 安装引导](./docs/zh/pve-install.md)
+1. 看 [Custom Build 使用说明](./docs/zh/custom-build.md)
+2. 构建完成后，如果要在 PVE 中导入，继续看 [PVE 安装引导](./docs/zh/pve-install.md)
 
-如果你要开发或调试构建系统本身，再看下面的本地构建说明。
+### 我想改这个仓库
 
-## 特性
+1. 先看 [中文主文档](./docs/zh/README.md)
+2. 再看 [贡献流程](./CONTRIBUTING.md)
 
-- 同时支持 Debian 和 Alpine 两种基础系统
-- 镜像身份由显式组合定义：`base_system + include_docker + output_formats`
-- 输出格式支持 `img`、`vmdk`、`ova`
-- 支持 BIOS + UEFI，常见虚拟化环境都比较友好
-- fork 用户也可以直接在 GitHub 上跑自定义构建
-- GitHub Actions 已经接好，支持自动构建、测试和发布
+## 项目概览
 
-## 文档导航
+- 基础系统：`debian` / `alpine`
+- 镜像身份：`base_system + include_docker + output_formats`
+- 输出格式：`img`、`vmdk`、`ova`
+- 默认上游版本：`build.env` 中的 `LANDSCAPE_VERSION`
 
-- 中文主文档：[`docs/zh/README.md`](./docs/zh/README.md)
-- 英文主文档：[`docs/en/README.md`](./docs/en/README.md)
-- Custom Build：[`docs/zh/custom-build.md`](./docs/zh/custom-build.md)
-- PVE 安装：[`docs/zh/pve-install.md`](./docs/zh/pve-install.md)
+## 默认登录
+
+| 场景 | 用户 | 密码 |
+|------|------|------|
+| SSH / 系统登录 | `root` | `landscape` |
+| SSH / 系统登录 | `ld` | `landscape` |
+| Web UI | `root` | `root` |
+
+> 通过 `Custom Build` 可以覆盖 Linux / Web 管理凭据。更多本地构建、测试、CI / Release、构建参数说明，见 [docs/zh/README.md](./docs/zh/README.md)。
