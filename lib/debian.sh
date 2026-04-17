@@ -137,6 +137,7 @@ EOF
             -o Acquire::https::Timeout=60 \
             install -y --no-install-recommends \
             linux-image-amd64 \
+            firmware-linux \
             grub-efi-amd64 \
             grub-pc-bin \
             initramfs-tools \
@@ -147,6 +148,8 @@ EOF
             bpftool \
             ppp \
             tcpdump \
+            ethtool \
+            pciutils \
             curl \
             ca-certificates \
             unzip \

@@ -51,6 +51,7 @@ declare -a CONFIG_ENV_KEYS=(
     RELEASE_TAG
     REPOSITORY_OWNER
     SOURCE_PROBE_TIMEOUT
+    SOURCE_FAILOVER_TIMEOUT
 )
 declare -A EXPLICIT_ENV_VALUES=()
 declare -A EXPLICIT_ENV_IS_SET=()
@@ -433,6 +434,7 @@ ROOTFS_DIR="${WORK_DIR}/rootfs"
 DOWNLOAD_DIR="${WORK_DIR}/downloads/${LANDSCAPE_VERSION}"
 LOOP_DEV=""
 SOURCE_PROBE_TIMEOUT="${SOURCE_PROBE_TIMEOUT:-5}"
+SOURCE_FAILOVER_TIMEOUT="${SOURCE_FAILOVER_TIMEOUT:-120}"
 
 BUILD_NAME="landscape-mini-x86-${BASE_SYSTEM}"
 if [[ "${INCLUDE_DOCKER}" == "true" ]]; then
@@ -472,7 +474,8 @@ resolve_build_sources() {
             "/dists/${DEBIAN_RELEASE}/main/binary-amd64/Packages.xz" \
             "RESOLVED_APT_MIRROR" \
             "RESOLVED_APT_MIRROR_SOURCE" \
-            "${SOURCE_PROBE_TIMEOUT}"
+            "${SOURCE_PROBE_TIMEOUT}" \
+            "${SOURCE_FAILOVER_TIMEOUT}"
         RESOLVED_ALPINE_MIRROR=""
         RESOLVED_ALPINE_MIRROR_SOURCE="unused"
     else
@@ -484,7 +487,8 @@ resolve_build_sources() {
             "/${ALPINE_RELEASE}/main/x86_64" \
             "RESOLVED_ALPINE_MIRROR" \
             "RESOLVED_ALPINE_MIRROR_SOURCE" \
-            "${SOURCE_PROBE_TIMEOUT}"
+            "${SOURCE_PROBE_TIMEOUT}" \
+            "${SOURCE_FAILOVER_TIMEOUT}"
         RESOLVED_APT_MIRROR=""
         RESOLVED_APT_MIRROR_SOURCE="unused"
     fi
@@ -498,7 +502,8 @@ resolve_build_sources() {
             "/dists/${DEBIAN_RELEASE}/stable/binary-amd64/Packages" \
             "RESOLVED_DOCKER_APT_MIRROR" \
             "RESOLVED_DOCKER_APT_MIRROR_SOURCE" \
-            "${SOURCE_PROBE_TIMEOUT}"
+            "${SOURCE_PROBE_TIMEOUT}" \
+            "${SOURCE_FAILOVER_TIMEOUT}"
 
         resolve_source \
             "Docker APT GPG URL" \
@@ -508,7 +513,8 @@ resolve_build_sources() {
             "" \
             "RESOLVED_DOCKER_APT_GPG_URL" \
             "RESOLVED_DOCKER_APT_GPG_URL_SOURCE" \
-            "${SOURCE_PROBE_TIMEOUT}"
+            "${SOURCE_PROBE_TIMEOUT}" \
+            "${SOURCE_FAILOVER_TIMEOUT}"
     else
         RESOLVED_DOCKER_APT_MIRROR=""
         RESOLVED_DOCKER_APT_MIRROR_SOURCE="unused"

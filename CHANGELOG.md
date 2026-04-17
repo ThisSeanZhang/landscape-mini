@@ -5,6 +5,11 @@ This file currently tracks unreleased work and recent notable changes.
 
 ## [Unreleased]
 
+### Fixed / 修复
+
+- Keep full wired NIC driver coverage during image trimming, ship PCI/NIC diagnostics tools, and install full firmware packages so Intel X520-DA2 passthrough and broader physical NIC compatibility work on both Debian and Alpine / 在镜像裁剪阶段保留完整有线网卡驱动覆盖，预装 PCI/NIC 诊断工具，并安装完整固件包，使 Debian 与 Alpine 上的 Intel X520-DA2 直通及更广泛实体网卡兼容性恢复正常
+- Prefer the first configured source candidate (official by default), retry it for a bounded failover window before switching to backups in order, and stop main CI from running readiness/dataplane tests by default on the Debian non-Docker build / 默认优先使用首个配置源（默认即官方源），在限定故障切换窗口内持续重试，超时后再按顺序切换到备用源，并让主 CI 的 Debian 非 Docker 默认构建不再自动运行 readiness/dataplane 测试
+
 ## [0.2.8] - 2026-04-17
 
 ### Fixed / 修复
