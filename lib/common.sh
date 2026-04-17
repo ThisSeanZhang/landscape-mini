@@ -267,69 +267,112 @@ derive_direct_probe_url() {
 }
 
 # ---------------------------------------------------------------------------
-# Helper: select fastest healthy source from candidates
+# Helper: derive a representative probe URL for one candidate
 # ---------------------------------------------------------------------------
-select_best_source() {
+derive_probe_url_for_candidate() {
+    local candidate="$1"
+    local probe_mode="$2"
+    local probe_target="$3"
+    local timeout_seconds="${4:-5}"
+
+    case "${probe_mode}" in
+        direct)
+            derive_direct_probe_url "${candidate}" "${probe_target}"
+            ;;
+        debian-package)
+            derive_debian_package_url "${candidate}" "${probe_target}" "${timeout_seconds}"
+            ;;
+        plain-debian-package)
+            derive_plain_debian_package_url "${candidate}" "${probe_target}" "${timeout_seconds}"
+            ;;
+        alpine-package)
+            derive_alpine_package_url "${candidate}" "${probe_target}" "${timeout_seconds}"
+            ;;
+        *)
+            echo "ERROR: Unknown probe mode '${probe_mode}'." >&2
+            return 1
+            ;;
+    esac
+}
+
+# ---------------------------------------------------------------------------
+# Helper: probe candidates in configured order with preferred-source failover
+# ---------------------------------------------------------------------------
+select_preferred_source() {
     local source_name="$1"
     local candidates="$2"
     local probe_mode="$3"
     local probe_target="$4"
     local timeout_seconds="${5:-5}"
-    local sample_bytes="${6:-5242880}"
-    local best_candidate=""
-    local best_speed=""
+    local failover_timeout_seconds="${6:-120}"
+    local sample_bytes="${7:-5242880}"
+    local -a candidate_list=()
+    local preferred_candidate=""
     local candidate representative_url measured_speed
+    local start_ts now_ts elapsed
 
     for candidate in ${candidates}; do
-        case "${probe_mode}" in
-            direct)
-                representative_url=$(derive_direct_probe_url "${candidate}" "${probe_target}")
-                ;;
-            debian-package)
-                representative_url=$(derive_debian_package_url "${candidate}" "${probe_target}" "${timeout_seconds}") || {
-                    echo "  [SKIP] ${source_name}: ${candidate}" >&2
-                    continue
-                }
-                ;;
-            plain-debian-package)
-                representative_url=$(derive_plain_debian_package_url "${candidate}" "${probe_target}" "${timeout_seconds}") || {
-                    echo "  [SKIP] ${source_name}: ${candidate}" >&2
-                    continue
-                }
-                ;;
-            alpine-package)
-                representative_url=$(derive_alpine_package_url "${candidate}" "${probe_target}" "${timeout_seconds}") || {
-                    echo "  [SKIP] ${source_name}: ${candidate}" >&2
-                    continue
-                }
-                ;;
-            *)
-                echo "ERROR: Unknown probe mode '${probe_mode}' for ${source_name}." >&2
-                return 1
-                ;;
-        esac
+        candidate_list+=("${candidate}")
+    done
+
+    if [[ ${#candidate_list[@]} -eq 0 ]]; then
+        return 1
+    fi
+
+    preferred_candidate="${candidate_list[0]}"
+    echo "  Preferring ${source_name}: ${preferred_candidate}" >&2
+    start_ts=$(date +%s)
+
+    while true; do
+        representative_url=$(derive_probe_url_for_candidate "${preferred_candidate}" "${probe_mode}" "${probe_target}" "${timeout_seconds}") || representative_url=""
+
+        if [[ -n "${representative_url}" ]]; then
+            echo "  Probing ${source_name}: ${representative_url}" >&2
+            if measured_speed=$(probe_url "${representative_url}" "${timeout_seconds}" "${sample_bytes}"); then
+                echo "  [OK] ${source_name}: ${preferred_candidate} (${measured_speed} B/s)" >&2
+                printf '%s\n' "${preferred_candidate}"
+                return 0
+            fi
+        fi
+
+        now_ts=$(date +%s)
+        elapsed=$(( now_ts - start_ts ))
+        if (( elapsed >= failover_timeout_seconds )); then
+            break
+        fi
+
+        echo "  [WAIT] ${source_name}: ${preferred_candidate} is still unhealthy, retrying until ${failover_timeout_seconds}s before fallback" >&2
+        sleep "${timeout_seconds}"
+    done
+
+    if (( ${#candidate_list[@]} == 1 )); then
+        return 1
+    fi
+
+    echo "  [FALLBACK] ${source_name}: ${preferred_candidate} stayed unhealthy for ${failover_timeout_seconds}s, trying backup candidates in order" >&2
+
+    for candidate in "${candidate_list[@]:1}"; do
+        representative_url=$(derive_probe_url_for_candidate "${candidate}" "${probe_mode}" "${probe_target}" "${timeout_seconds}") || representative_url=""
+        if [[ -z "${representative_url}" ]]; then
+            echo "  [SKIP] ${source_name}: ${candidate}" >&2
+            continue
+        fi
 
         echo "  Probing ${source_name}: ${representative_url}" >&2
         if measured_speed=$(probe_url "${representative_url}" "${timeout_seconds}" "${sample_bytes}"); then
             echo "  [OK] ${source_name}: ${candidate} (${measured_speed} B/s)" >&2
-            if [[ -z "${best_candidate}" ]] || awk "BEGIN {exit !(${measured_speed} > ${best_speed})}"; then
-                best_candidate="${candidate}"
-                best_speed="${measured_speed}"
-            fi
-        else
-            echo "  [SKIP] ${source_name}: ${candidate}" >&2
+            printf '%s\n' "${candidate}"
+            return 0
         fi
+
+        echo "  [SKIP] ${source_name}: ${candidate}" >&2
     done
 
-    if [[ -z "${best_candidate}" ]]; then
-        return 1
-    fi
-
-    printf '%s\n' "${best_candidate}"
+    return 1
 }
 
 # ---------------------------------------------------------------------------
-# Helper: resolve explicit or probed source
+# Helper: resolve explicit or ordered-fallback source
 # ---------------------------------------------------------------------------
 resolve_source() {
     local source_name="$1"
@@ -340,7 +383,8 @@ resolve_source() {
     local resolved_var_name="$6"
     local source_origin_var_name="$7"
     local timeout_seconds="${8:-5}"
-    local sample_bytes="${9:-5242880}"
+    local failover_timeout_seconds="${9:-120}"
+    local sample_bytes="${10:-5242880}"
     local resolved_value
 
     if [[ -n "${explicit_value}" ]]; then
@@ -350,7 +394,7 @@ resolve_source() {
         return 0
     fi
 
-    if ! resolved_value=$(select_best_source "${source_name}" "${candidates}" "${probe_mode}" "${probe_target}" "${timeout_seconds}" "${sample_bytes}"); then
+    if ! resolved_value=$(select_preferred_source "${source_name}" "${candidates}" "${probe_mode}" "${probe_target}" "${timeout_seconds}" "${failover_timeout_seconds}" "${sample_bytes}"); then
         echo "ERROR: No healthy ${source_name} candidates found." >&2
         return 1
     fi
@@ -827,25 +871,14 @@ phase_cleanup_and_shrink() {
                      nfc firewire thunderbolt ufs atm vfio \
                      leds vdpa ntb dma accessibility gpio pinctrl pcmcia \
                      spi memstick power soundwire ssb parport uio \
-                     nvdimm rpmsg bcma auxdisplay cdrom mfd gnss dca mux \
+                     nvdimm rpmsg bcma auxdisplay cdrom mfd gnss mux \
                      pwm powercap soc regulator extcon dax devfreq; do
                 rm -rf \"\$KDIR/drivers/\$d\"
             done
 
-            for d in can wwan arcnet fddi hamradio ieee802154 wan wireless \
-                     dsa fjes hippi plip slip thunderbolt xen-netback \
-                     mdio pcs ipvlan; do
-                rm -rf \"\$KDIR/drivers/net/\$d\"
-            done
+            # Keep full wired NIC driver coverage and adjacent support modules.
+            # Hardware NIC compatibility takes priority over image size trimming.
 
-            if [ -d \"\$KDIR/drivers/net/ethernet\" ]; then
-                for d in \"\$KDIR/drivers/net/ethernet\"/*/; do
-                    case \"\$(basename \"\$d\")\" in
-                        intel|realtek|broadcom|amazon|google|mellanox|microsoft|aquantia|amd|huawei|marvell|atheros|cavium|chelsio) ;;
-                        *) rm -rf \"\$d\" ;;
-                    esac
-                done
-            fi
 
             for d in bluetooth mac80211 wireless sunrpc ceph tipc nfc rxrpc smc sctp \
                      atm dccp ieee802154 mac802154 6lowpan 9p openvswitch \

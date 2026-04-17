@@ -123,7 +123,7 @@ EOF
     run_in_chroot_retry 3 5 "
         apk update
         apk add --no-cache \
-            linux-lts linux-firmware-none \
+            linux-lts linux-firmware \
             grub-efi grub-bios \
             mkinitfs \
             e2fsprogs e2fsprogs-extra \
@@ -133,6 +133,8 @@ EOF
             bpftool \
             ppp \
             tcpdump \
+            ethtool \
+            pciutils \
             curl \
             ca-certificates \
             unzip \

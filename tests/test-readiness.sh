@@ -166,6 +166,8 @@ run_smoke_checks() {
 
     ip_forward="$(guest_run "cat /proc/sys/net/ipv4/ip_forward" 2>/dev/null || true)"
     run_check "IP forwarding enabled" test "$ip_forward" = "1"
+    run_check "Intel ixgbe driver loads" guest_run "modprobe ixgbe && grep -q '^ixgbe ' /proc/modules"
+    run_check "PCI/NIC diagnostics tools installed" guest_run "command -v lspci >/dev/null 2>&1 && command -v ethtool >/dev/null 2>&1"
 
     if landscape_test_requires_docker; then
         run_check "Docker image is functional" docker_functional_check
