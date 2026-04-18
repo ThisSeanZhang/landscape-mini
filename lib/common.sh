@@ -515,7 +515,7 @@ export_vmdk() {
 export_ova() {
     local work_dir ovf_path mf_path stream_vmdk_path stream_vmdk_name
     local ovf_name mf_name
-    local raw_size_bytes sectors_512 stream_vmdk_size_bytes
+    local raw_size_bytes sectors_512 stream_vmdk_size_bytes ovf_disk_format
     local vm_name escaped_vm_name os_desc escaped_os_desc os_id cpu_cores memory_mb nic_model nic_desc
 
     if [[ -f "${OVA_FILE}" ]]; then
@@ -541,10 +541,10 @@ export_ova() {
     nic_desc="VirtIO ethernet adapter"
 
     if [[ "${BASE_SYSTEM}" == "alpine" ]]; then
-        os_id="93"
+        os_id="101"
         os_desc="Alpine Linux 64-bit"
     else
-        os_id="94"
+        os_id="96"
         os_desc="Debian GNU/Linux 64-bit"
     fi
 
@@ -556,6 +556,7 @@ export_ova() {
 
     escaped_vm_name=$(xml_escape "${vm_name}")
     escaped_os_desc=$(xml_escape "${os_desc}")
+    ovf_disk_format="http://www.vmware.com/interfaces/specifications/vmdk.html#streamOptimized"
 
     qemu-img convert -f raw -O vmdk -o subformat=streamOptimized "${IMAGE_FILE}" "${stream_vmdk_path}"
     stream_vmdk_size_bytes=$(stat -c '%s' "${stream_vmdk_path}")
@@ -575,7 +576,8 @@ export_ova() {
     <Disk ovf:diskId="disk1"
           ovf:fileRef="file1"
           ovf:capacity="${sectors_512}"
-          ovf:capacityAllocationUnits="byte * 512"/>
+          ovf:capacityAllocationUnits="byte * 512"
+          ovf:format="${ovf_disk_format}"/>
   </DiskSection>
   <NetworkSection>
     <Info>Logical networks</Info>
