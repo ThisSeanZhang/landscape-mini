@@ -79,12 +79,25 @@ Click **Run workflow**. A successful build produces:
 - `effective-landscape_init.toml`
 - if requested, `.vmdk` / `.ova`
 
-Fixed entry point for direct links:
+You now get two retrieval paths:
 
-- Release page: `https://github.com/<owner>/landscape-mini/releases/tag/custom-build-latest`
-- Direct download base: `https://github.com/<owner>/landscape-mini/releases/download/custom-build-latest/<asset>`
+| Entry point | Use case | Link format |
+| --- | --- | --- |
+| `custom-build-latest` | stable entry for the latest successful build | `https://github.com/<owner>/landscape-mini/releases/tag/custom-build-latest` |
+| `custom-build-<artifact_id>` | immutable page for this exact build | `https://github.com/<owner>/landscape-mini/releases/tag/custom-build-<artifact_id>` |
 
-If you need immutable outputs for a specific build, use the Artifacts from that workflow run or record its `run_id` / `artifact_id`.
+Copy-ready direct download formats:
+
+- latest: `https://github.com/<owner>/landscape-mini/releases/download/custom-build-latest/<asset>`
+- history: `https://github.com/<owner>/landscape-mini/releases/download/custom-build-<artifact_id>/<asset>`
+
+Notes:
+
+- `<owner>` is your fork or repository owner name
+- `custom-build-latest` moves to the newest successful build
+- `custom-build-<artifact_id>` stays immutable and is not replaced by later runs
+- the workflow summary renders the latest page, history page, and per-asset direct links for easy copy/paste
+- if you also want the original workflow artifact identity, keep `run_id` / `artifact_id`
 
 ---
 

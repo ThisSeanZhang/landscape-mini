@@ -79,12 +79,25 @@
 - `effective-landscape_init.toml`
 - 如果请求了额外格式，还会包含 `.vmdk` / `.ova`
 
-更适合直接取链接的固定入口：
+现在有两种取回方式：
 
-- Release 页面：`https://github.com/<owner>/landscape-mini/releases/tag/custom-build-latest`
-- 下载直链：`https://github.com/<owner>/landscape-mini/releases/download/custom-build-latest/<asset>`
+| 入口 | 用途 | 链接格式 |
+| --- | --- | --- |
+| `custom-build-latest` | 最近一次成功构建的固定入口 | `https://github.com/<owner>/landscape-mini/releases/tag/custom-build-latest` |
+| `custom-build-<artifact_id>` | 当前这次构建的不可变历史入口 | `https://github.com/<owner>/landscape-mini/releases/tag/custom-build-<artifact_id>` |
 
-如果你要保留某一次构建的不可变产物，请使用对应 workflow run 的 Artifacts，或记录 `run_id` / `artifact_id`。
+可直接复制的下载直链格式：
+
+- latest：`https://github.com/<owner>/landscape-mini/releases/download/custom-build-latest/<asset>`
+- 历史：`https://github.com/<owner>/landscape-mini/releases/download/custom-build-<artifact_id>/<asset>`
+
+说明：
+
+- `<owner>` 就是你自己 fork / 仓库的用户名或组织名
+- `custom-build-latest` 会随着后续成功构建更新
+- `custom-build-<artifact_id>` 会固定保留，不会被后续成功构建覆盖
+- workflow summary 会直接渲染本次构建的 release 页面、历史页面和每个产物的直链，方便直接复制
+- 如果你还要保留 workflow 原始 artifact，也仍然可以记录 `run_id` / `artifact_id`
 
 ---
 

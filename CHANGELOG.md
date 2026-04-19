@@ -5,6 +5,16 @@ This file currently tracks unreleased work and recent notable changes.
 
 ## [Unreleased]
 
+### Changed / 变更
+
+- Improve Custom Build result UX by rendering table-based workflow summaries, adding copy-ready latest/history direct links, and publishing both a stable `custom-build-latest` entry plus immutable per-build `custom-build-<artifact_id>` releases / 优化 Custom Build 结果体验：将 workflow summary 改为表格展示，补充可直接复制的 latest/history 直链，并同时发布稳定入口 `custom-build-latest` 与按构建保留的不可变 `custom-build-<artifact_id>` release
+- Clarify Custom Build documentation around latest vs immutable history retrieval so fork users can distinguish moving pointers from exact-build download pages more easily / 更新 Custom Build 文档，明确区分 latest 固定入口与不可变历史入口，方便 fork 用户更直接地获取精确构建页面和下载链接
+
+### Fixed / 修复
+
+- Stop Custom Build publishing from deleting the previous fixed release on each successful run so earlier successful results remain shareable and reproducible / 修复 Custom Build 每次成功后都会删除上一个固定 release 的行为，使之前的成功结果可以继续分享和复现
+
+
 ## [0.2.9] - 2026-04-17
 
 ### Fixed / 修复

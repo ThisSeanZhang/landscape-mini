@@ -282,13 +282,26 @@ The workflow writes the following identity fields into `build-metadata.txt`:
 
 The effective network topology is shipped inside the artifact as `effective-landscape_init.toml` for `test.yml`, fixed-release publishing, and tag release rebuild validation.
 
-Successful Custom Build runs also publish to the fixed tag `custom-build-latest` in the fork.
-It is a moving pointer to the latest successful Custom Build rather than a per-tuple permanent download slot; any later successful build overwrites it.
+Successful Custom Build runs now publish two entry points in the fork:
 
-- Release page: `https://github.com/<owner>/landscape-mini/releases/tag/custom-build-latest`
-- Direct download base: `https://github.com/<owner>/landscape-mini/releases/download/custom-build-latest/<asset>`
+- stable entry: `custom-build-latest`
+- immutable history entry: `custom-build-<artifact_id>`
 
-If you need immutable per-build outputs, use the Artifacts from that workflow run or record its `run_id` / `artifact_id`.
+This means:
+
+- `custom-build-latest` always points to the newest successful Custom Build
+- `custom-build-<artifact_id>` permanently preserves that exact build and is not replaced by later runs
+
+Common link formats:
+
+- Latest release page: `https://github.com/<owner>/landscape-mini/releases/tag/custom-build-latest`
+- Latest direct download: `https://github.com/<owner>/landscape-mini/releases/download/custom-build-latest/<asset>`
+- History release page: `https://github.com/<owner>/landscape-mini/releases/tag/custom-build-<artifact_id>`
+- History direct download: `https://github.com/<owner>/landscape-mini/releases/download/custom-build-<artifact_id>/<asset>`
+
+The workflow summary renders the latest page, history page, and per-asset direct links for easy copy/paste.
+
+Artifacts remain immutable as well; if you want to keep the workflow-side identity, you can still record `run_id` / `artifact_id`.
 
 ## Automated Testing
 

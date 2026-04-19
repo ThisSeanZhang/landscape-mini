@@ -279,22 +279,34 @@ jobs:
           set -euo pipefail
           {
             echo "## Custom Build 请求摘要"
-            echo "- 请求 tuple: ${{ github.event.inputs.base_system }} + docker=${{ github.event.inputs.include_docker }}"
-            echo "- 归一化 output_formats: ${{ steps.validate.outputs.output_formats }}"
-            echo "- 归一化 run_test: ${{ steps.validate.outputs.run_test || '(empty)' }}"
-            echo "- Landscape 版本输入: ${{ github.event.inputs.landscape_version || '(build.env default)' }}"
-            echo "- 配置档案: ${{ steps.meta.outputs.config_profile }}"
-            echo "- 拓扑来源: ${{ steps.meta.outputs.topology_source }}"
+            echo ""
+            echo "| 项目 | 值 |"
+            echo "| --- | --- |"
+            echo "| Repository owner | ${{ github.repository_owner }} |"
+            echo "| 请求 tuple | ${{ github.event.inputs.base_system }} + docker=${{ github.event.inputs.include_docker }} |"
+            echo "| 归一化 output_formats | ${{ steps.validate.outputs.output_formats }} |"
+            echo "| 归一化 run_test | ${{ steps.validate.outputs.run_test || '(empty)' }} |"
+            echo "| Landscape 版本输入 | ${{ github.event.inputs.landscape_version || '(build.env default)' }} |"
+            echo "| 配置档案 | ${{ steps.meta.outputs.config_profile }} |"
+            echo "| 拓扑来源 | ${{ steps.meta.outputs.topology_source }} |"
             echo ""
             echo "## 凭据来源"
-            echo "- Linux 密码来源: ${{ steps.creds.outputs.root_password_source }}"
-            echo "- Web 用户名来源: ${{ steps.creds.outputs.api_username_source }}"
-            echo "- Web 密码来源: ${{ steps.creds.outputs.api_password_source }}"
+            echo ""
+            echo "| 凭据项 | 来源 |"
+            echo "| --- | --- |"
+            echo "| Linux 密码 | ${{ steps.creds.outputs.root_password_source }} |"
+            echo "| Web 用户名 | ${{ steps.creds.outputs.api_username_source }} |"
+            echo "| Web 密码 | ${{ steps.creds.outputs.api_password_source }} |"
             echo ""
             echo "## 后续流程"
-            echo "- build job 会按上面的归一化 tuple 继续执行"
-            echo "- 成功后会发布一个会被后续成功构建覆盖的固定 release：\`custom-build-latest\`，同时保留当前 run 的不可变 Artifacts"
-            echo "- 如果请求 \`readiness,dataplane\` 且 \`include_docker=true\`，dataplane 会被明确 skip"
+            echo ""
+            echo "| 项目 | 说明 |"
+            echo "| --- | --- |"
+            echo "| Build job | 按归一化 tuple 继续执行 |"
+            echo "| Latest release | 成功后更新固定入口 \`custom-build-latest\` |"
+            echo "| 历史 release | 成功后新增 \`custom-build-<artifact_id>\`，保留历史结果 |"
+            echo "| Workflow artifacts | 当前 run 的 Artifacts 保持不可变 |"
+            echo "| Dataplane 规则 | 请求 \`readiness,dataplane\` 且 \`include_docker=true\` 时明确 skip |"
           } >> "$GITHUB_STEP_SUMMARY"
 
   build:
@@ -338,6 +350,7 @@ jobs:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       GH_REPO: ${{ github.repository }}
       RELEASE_TAG: custom-build-latest
+      WORKFLOW_RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
     steps:
       - name: Download image artifact
         uses: actions/download-artifact@v4
@@ -346,6 +359,7 @@ jobs:
           path: dist/
 
       - name: Prepare fixed-release assets
+        id: assets
         shell: bash
         run: |
           set -euo pipefail
@@ -358,27 +372,31 @@ jobs:
           base_system=""
           include_docker=""
           produced_files=""
+          output_formats=""
+          artifact_id=""
+          run_id=""
           while IFS='=' read -r key value; do
             case "$key" in
-              base_system|include_docker|produced_files)
+              base_system|include_docker|produced_files|output_formats|artifact_id|run_id)
                 printf -v "$key" '%s' "$value"
                 ;;
             esac
           done < "$metadata"
 
-          for key in base_system include_docker produced_files; do
+          for key in base_system include_docker produced_files output_formats artifact_id run_id; do
             if [ -z "${!key}" ]; then
               echo "Missing required key in build metadata: $key" >&2
               exit 1
             fi
           done
 
+          history_tag="custom-build-${artifact_id}"
           base_name="landscape-mini-x86-${base_system}"
           if [ "$include_docker" = "true" ]; then
             base_name="${base_name}-docker"
           fi
 
-          mkdir -p release-assets
+          mkdir -p release-assets/latest release-assets/history
           IFS=',' read -r -a files <<< "$produced_files"
           for produced in "${files[@]}"; do
             produced="${produced//[[:space:]]/}"
@@ -411,118 +429,199 @@ jobs:
                 ;;
             esac
 
-            cp "$src" "release-assets/${target}"
+            cp "$src" "release-assets/latest/${target}"
+            cp "$src" "release-assets/history/${target}"
           done
 
-          if [ -f "release-assets/${base_name}.img" ] && [ ! -f "release-assets/${base_name}.img.gz" ]; then
-            gzip -k -f "release-assets/${base_name}.img"
+          if [ -f "release-assets/latest/${base_name}.img" ] && [ ! -f "release-assets/latest/${base_name}.img.gz" ]; then
+            gzip -k -f "release-assets/latest/${base_name}.img"
+          fi
+          if [ -f "release-assets/history/${base_name}.img" ] && [ ! -f "release-assets/history/${base_name}.img.gz" ]; then
+            gzip -k -f "release-assets/history/${base_name}.img"
           fi
 
-          cp "$metadata" release-assets/build-metadata.txt
-          fixed_produced_files=""
-          for asset in release-assets/*; do
-            name="$(basename "$asset")"
-            case "$name" in
-              build-metadata.txt|effective-landscape_init.toml|*.img|*.vmdk)
-                continue
-                ;;
-            esac
-            if [ -n "$fixed_produced_files" ]; then
-              fixed_produced_files+=","
+          if [ -f dist/metadata/effective-landscape_init.toml ]; then
+            cp dist/metadata/effective-landscape_init.toml release-assets/latest/effective-landscape_init.toml
+            cp dist/metadata/effective-landscape_init.toml release-assets/history/effective-landscape_init.toml
+          fi
+
+          for scope in latest history; do
+            cp "$metadata" "release-assets/${scope}/build-metadata.txt"
+
+            normalized_produced_files=""
+            for asset in release-assets/${scope}/*; do
+              name="$(basename "$asset")"
+              case "$name" in
+                build-metadata.txt|effective-landscape_init.toml|*.img|*.vmdk)
+                  continue
+                  ;;
+              esac
+              if [ -n "$normalized_produced_files" ]; then
+                normalized_produced_files+=","
+              fi
+              normalized_produced_files+="$name"
+            done
+
+            if [ -z "$normalized_produced_files" ]; then
+              echo "No release assets were prepared for ${scope} release" >&2
+              exit 1
             fi
-            fixed_produced_files+="$name"
+
+            tmp_metadata="$(mktemp)"
+            awk -F= -v produced_files="$normalized_produced_files" '
+              BEGIN { updated=0 }
+              /^produced_files=/ { print "produced_files=" produced_files; updated=1; next }
+              { print }
+              END { if (!updated) print "produced_files=" produced_files }
+            ' "$metadata" > "$tmp_metadata"
+            mv "$tmp_metadata" "release-assets/${scope}/build-metadata.txt"
           done
 
-          if [ -z "$fixed_produced_files" ]; then
-            echo "No release assets were prepared for fixed release" >&2
+          {
+            echo "history_tag=$history_tag"
+            echo "artifact_id=$artifact_id"
+            echo "run_id=$run_id"
+            echo "output_formats=$output_formats"
+            echo "produced_files=$(awk -F= '/^produced_files=/{print $2; exit}' release-assets/latest/build-metadata.txt)"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Publish immutable history release
+        shell: bash
+        env:
+          HISTORY_TAG: ${{ steps.assets.outputs.history_tag }}
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          history_files=(
+            release-assets/history/*.img.gz
+            release-assets/history/*.ova
+            release-assets/history/*.vmdk.gz
+            release-assets/history/build-metadata.txt
+            release-assets/history/effective-landscape_init.toml
+          )
+          if [ ${#history_files[@]} -eq 0 ]; then
+            echo "No history release assets were prepared" >&2
             exit 1
           fi
 
-          tmp_metadata="$(mktemp)"
-          awk -F= -v produced_files="$fixed_produced_files" '
-            BEGIN { updated=0 }
-            /^produced_files=/ { print "produced_files=" produced_files; updated=1; next }
-            { print }
-            END { if (!updated) print "produced_files=" produced_files }
-          ' "$metadata" > "$tmp_metadata"
-          mv "$tmp_metadata" release-assets/build-metadata.txt
-          if [ -f dist/metadata/effective-landscape_init.toml ]; then
-            cp dist/metadata/effective-landscape_init.toml release-assets/effective-landscape_init.toml
+          if gh release view "$HISTORY_TAG" --repo "$GH_REPO" >/dev/null 2>&1; then
+            echo "History release already exists: $HISTORY_TAG"
+            exit 0
           fi
 
-      - name: Recreate fixed release
+          gh release create "$HISTORY_TAG" "${history_files[@]}" \
+            --repo "$GH_REPO" \
+            --target "$GITHUB_SHA" \
+            --title "Custom Build ${HISTORY_TAG#custom-build-}" \
+            --notes "Immutable custom build result for artifact ${HISTORY_TAG#custom-build-}." \
+            --prerelease
+
+      - name: Publish or update latest release
         shell: bash
         run: |
           set -euo pipefail
-          if gh release view "$RELEASE_TAG" --repo "$GH_REPO" >/dev/null 2>&1; then
-            gh release delete "$RELEASE_TAG" --repo "$GH_REPO" --yes --cleanup-tag
-          fi
-
           shopt -s nullglob
-          release_files=(release-assets/*.img.gz release-assets/*.ova release-assets/*.vmdk.gz)
-          if [ ${#release_files[@]} -eq 0 ]; then
-            echo "No publishable release assets were prepared" >&2
+          latest_files=(release-assets/latest/*.img.gz release-assets/latest/*.ova release-assets/latest/*.vmdk.gz)
+          if [ ${#latest_files[@]} -eq 0 ]; then
+            echo "No publishable latest release assets were prepared" >&2
             exit 1
           fi
 
-          gh release create "$RELEASE_TAG" "${release_files[@]}" \
-            --repo "$GH_REPO" \
-            --target "$GITHUB_SHA" \
-            --title "Custom Build Latest" \
-            --notes "Latest successful custom build for this repository owner. Assets are replaced on each successful run." \
-            --prerelease
+          if gh release view "$RELEASE_TAG" --repo "$GH_REPO" >/dev/null 2>&1; then
+            gh release edit "$RELEASE_TAG" \
+              --repo "$GH_REPO" \
+              --title "Custom Build Latest" \
+              --notes "Latest successful custom build for this repository owner. Direct links below always point to the newest successful run."
+
+            while IFS= read -r existing_asset; do
+              case "$existing_asset" in
+                landscape-mini-x86-*.img.gz|landscape-mini-x86-*.ova|landscape-mini-x86-*.vmdk.gz)
+                  gh release delete-asset "$RELEASE_TAG" "$existing_asset" \
+                    --repo "$GH_REPO" \
+                    --yes
+                  ;;
+              esac
+            done < <(gh release view "$RELEASE_TAG" --repo "$GH_REPO" --json assets --jq '.assets[].name')
+
+            gh release upload "$RELEASE_TAG" "${latest_files[@]}" \
+              --repo "$GH_REPO"
+          else
+            gh release create "$RELEASE_TAG" "${latest_files[@]}" \
+              --repo "$GH_REPO" \
+              --target "$GITHUB_SHA" \
+              --title "Custom Build Latest" \
+              --notes "Latest successful custom build for this repository owner. Direct links below always point to the newest successful run." \
+              --prerelease
+          fi
+
 
       - name: Publish fixed-release summary
         shell: bash
+        env:
+          HISTORY_TAG: ${{ steps.assets.outputs.history_tag }}
+          ARTIFACT_ID: ${{ steps.assets.outputs.artifact_id }}
+          BUILD_RUN_ID: ${{ steps.assets.outputs.run_id }}
+          OUTPUT_FORMATS: ${{ steps.assets.outputs.output_formats }}
+          PRODUCED_FILES: ${{ steps.assets.outputs.produced_files }}
         run: |
           set -euo pipefail
-          metadata="release-assets/build-metadata.txt"
-          output_formats=""
-          produced_files=""
-          while IFS='=' read -r key value; do
-            case "$key" in
-              output_formats|produced_files)
-                printf -v "$key" '%s' "$value"
-                ;;
+          latest_release_url="https://github.com/${{ github.repository }}/releases/tag/${RELEASE_TAG}"
+          latest_download_base="https://github.com/${{ github.repository }}/releases/download/${RELEASE_TAG}"
+          history_release_url="https://github.com/${{ github.repository }}/releases/tag/${HISTORY_TAG}"
+          history_download_base="https://github.com/${{ github.repository }}/releases/download/${HISTORY_TAG}"
+
+          describe_asset() {
+            case "$1" in
+              *.ova) printf '%s' 'PVE / 虚拟化导入包' ;;
+              *.img.gz) printf '%s' '压缩 raw 镜像' ;;
+              *.vmdk.gz) printf '%s' '压缩 VMDK 镜像' ;;
+              *) printf '%s' '构建产物' ;;
             esac
-          done < "$metadata"
-
-          for key in output_formats produced_files; do
-            if [ -z "${!key}" ]; then
-              echo "Missing required key in build metadata: $key" >&2
-              exit 1
-            fi
-          done
-
-          has_ova=false
-          has_img_gz=false
-          case ",$produced_files," in
-            *,*.ova,*) has_ova=true ;;
-          esac
-          case ",$produced_files," in
-            *,*.img.gz,*) has_img_gz=true ;;
-          esac
+          }
 
           {
             echo '## Custom Build 最新产物'
-            echo "- Tag: ${RELEASE_TAG}"
-            echo "- Tuple: ${{ github.event.inputs.base_system }} + docker=${{ github.event.inputs.include_docker }}"
-            echo "- 请求的 output_formats: ${output_formats}"
-            echo "- 实际产物: ${produced_files}"
-            echo "- Release 页面: https://github.com/${{ github.repository }}/releases/tag/${RELEASE_TAG}"
-            echo "- 下载直链基址: https://github.com/${{ github.repository }}/releases/download/${RELEASE_TAG}/<asset>"
-            echo '- 注意：后续成功的 Custom Build 会覆盖这个固定 release'
             echo ''
-            echo '### 后续使用建议'
-            if [ "$has_ova" = true ]; then
-              echo '- 下载 `.ova`：直接导入 Proxmox VE'
-            fi
-            if [ "$has_img_gz" = true ]; then
-              echo '- 下载 `.img.gz`：压缩后的 raw 安装镜像'
-            fi
-            echo '- `build-metadata.txt` 记录本次 tuple 与实际产物'
-            echo '- `effective-landscape_init.toml` 记录最终生效的网络配置'
-            echo '- 如果你需要不可变产物，请使用当前 workflow run 的 Artifacts'
-            echo '- 导入 Proxmox VE 后，请检查启动模式、磁盘控制器与 bridge 绑定'
-            echo '- Proxmox 当前不会稳定从 OVF 里继承 CPU type=host；如果你需要，请在导入后手动设置'
+            echo '| 项目 | 值 |'
+            echo '| --- | --- |'
+            echo "| Repository owner | ${{ github.repository_owner }} |"
+            echo "| Tuple | ${{ github.event.inputs.base_system }} + docker=${{ github.event.inputs.include_docker }} |"
+            echo "| artifact_id | ${ARTIFACT_ID} |"
+            echo "| run_id | ${BUILD_RUN_ID} |"
+            echo "| 请求的 output_formats | ${OUTPUT_FORMATS} |"
+            echo "| 实际产物 | ${PRODUCED_FILES} |"
+            echo ''
+            echo '## 结果入口'
+            echo ''
+            echo '| 类型 | 链接 |'
+            echo '| --- | --- |'
+            echo "| Latest release 页面 | ${latest_release_url} |"
+            echo "| Latest 下载基址 | ${latest_download_base} |"
+            echo "| 历史 release 页面 | ${history_release_url} |"
+            echo "| 历史下载基址 | ${history_download_base} |"
+            echo "| 当前 workflow run | ${WORKFLOW_RUN_URL} |"
+            echo ''
+            echo '## 产物直链'
+            echo ''
+            echo '| 产物 | 类型 | Latest 直链 | 历史直链 |'
+            echo '| --- | --- | --- | --- |'
+            IFS=',' read -r -a files <<< "$PRODUCED_FILES"
+            for asset in "${files[@]}"; do
+              asset="${asset//[[:space:]]/}"
+              [ -n "$asset" ] || continue
+              latest_link="${latest_download_base}/${asset}"
+              history_link="${history_download_base}/${asset}"
+              echo "| ${asset} | $(describe_asset "$asset") | ${latest_link} | ${history_link} |"
+            done
+            echo ''
+            echo '## 使用说明'
+            echo ''
+            echo '| 项目 | 说明 |'
+            echo '| --- | --- |'
+            echo '| Latest | 总是指向最近一次成功 Custom Build |'
+            echo '| 历史 | 固定保留本次构建，不会被后续成功构建覆盖 |'
+            echo '| build-metadata.txt | 已附带在历史 release 中，记录 tuple 与产物身份 |'
+            echo '| effective-landscape_init.toml | 已附带在历史 release 中，记录最终生效网络配置 |'
+            echo '| PVE 导入 | 导入后仍建议检查启动模式、磁盘控制器与 bridge 绑定 |'
+            echo '| CPU type=host | Proxmox 当前不会稳定从 OVF 继承，必要时请导入后手动设置 |'
           } >> "$GITHUB_STEP_SUMMARY"

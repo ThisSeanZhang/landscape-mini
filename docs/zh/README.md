@@ -282,13 +282,26 @@ workflow 会把以下身份信息写入 `build-metadata.txt`：
 
 网络拓扑的有效配置会随 artifact 一起携带为 `effective-landscape_init.toml`，供 `test.yml`、固定 release 发布和 tag release rebuild 校验使用。
 
-成功的 Custom Build 还会自动发布到 fork 仓库中的固定 tag：`custom-build-latest`。
-它提供的是“最近一次成功 Custom Build”的固定入口，而不是按 tuple 固定保留的下载位；后续任意成功的 Custom Build（例如 Debian / Alpine、Docker / 非 Docker）都会覆盖这里的内容。
+成功的 Custom Build 现在会同时发布两类入口：
 
-- Release 页面：`https://github.com/<owner>/landscape-mini/releases/tag/custom-build-latest`
-- 下载直链：`https://github.com/<owner>/landscape-mini/releases/download/custom-build-latest/<asset>`
+- 固定入口：`custom-build-latest`
+- 历史入口：`custom-build-<artifact_id>`
 
-如果你需要不可变的构建产物，请使用对应 workflow run 的 Artifacts，或记录 `run_id` / `artifact_id`。
+其中：
+
+- `custom-build-latest` 始终指向最近一次成功 Custom Build
+- `custom-build-<artifact_id>` 固定保留本次构建，不会被后续成功构建覆盖
+
+常用链接格式：
+
+- Latest Release 页面：`https://github.com/<owner>/landscape-mini/releases/tag/custom-build-latest`
+- Latest 下载直链：`https://github.com/<owner>/landscape-mini/releases/download/custom-build-latest/<asset>`
+- 历史 Release 页面：`https://github.com/<owner>/landscape-mini/releases/tag/custom-build-<artifact_id>`
+- 历史下载直链：`https://github.com/<owner>/landscape-mini/releases/download/custom-build-<artifact_id>/<asset>`
+
+workflow summary 会直接渲染本次构建的 latest / 历史页面和各产物直链，方便复制。
+
+Artifacts 仍然保持不可变；如果你要保留 workflow 侧的原始身份，也可以继续记录 `run_id` / `artifact_id`。
 
 ## 自动化测试
 

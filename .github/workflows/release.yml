@@ -177,13 +177,23 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          release_url="https://github.com/${{ github.repository }}/releases/tag/${{ needs.prepare.outputs.release_tag }}"
           {
             echo "## Release rebuild"
-            echo "- Tag: ${{ needs.prepare.outputs.release_tag }}"
-            echo "- Source commit: ${{ needs.prepare.outputs.target_sha }}"
-            echo "- Build mode: rebuild on tag push (no CI artifact promotion)"
-            echo "- Tuple coverage: debian × include_docker true/false"
-            echo "- Published files: .img.gz + .ova"
+            echo ""
+            echo "| Field | Value |"
+            echo "| --- | --- |"
+            echo "| Tag | ${{ needs.prepare.outputs.release_tag }} |"
+            echo "| Source commit | ${{ needs.prepare.outputs.target_sha }} |"
+            echo "| Build mode | rebuild on tag push (no CI artifact promotion) |"
+            echo "| Tuple coverage | debian × include_docker true/false |"
+            echo "| Published files | .img.gz + .ova |"
+            echo "| Release page | ${release_url} |"
+            echo ""
+            echo "| Asset group | Intended use |"
+            echo "| --- | --- |"
+            echo "| .img.gz | compressed raw image for direct install or flashing |"
+            echo "| .ova | virtual appliance import package |"
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Create GitHub Release
